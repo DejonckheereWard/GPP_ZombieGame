@@ -13,10 +13,10 @@ struct SteeringPlugin_Output
 struct PluginInfo
 {
 	std::string BotName = "Minion";
-	std::string Student_FirstName = "Not Set";
-	std::string Student_LastName = "Not Set";
-	std::string Student_Class = "Not Set";
-};	
+	std::string Student_FirstName = "Ward";
+	std::string Student_LastName = "Dejonckheere";
+	std::string Student_Class = "2DAE07";
+};
 
 struct GameDebugParams //Debuggin Purposes only (Ignored during release build)
 {
