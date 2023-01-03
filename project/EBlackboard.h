@@ -28,7 +28,8 @@ class BlackboardField: public IBlackBoardField
 {
 public:
 	explicit BlackboardField(T data): m_Data(data)
-	{}
+	{
+	}
 	T GetData() { return m_Data; };
 	void SetData(T data) { m_Data = data; }
 

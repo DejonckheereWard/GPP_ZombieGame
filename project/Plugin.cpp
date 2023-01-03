@@ -3,7 +3,7 @@
 #include "IExamInterface.h"
 #include "EBehaviorTree.h"
 #include "EBlackboard.h"
-using namespace std;
+#include "Behaviors.h"
 
 //Called only once, during initialization
 void Plugin::Initialize(IBaseInterface* pInterface, PluginInfo& info)
@@ -214,9 +214,9 @@ void Plugin::Render(float dt) const
 	m_pInterface->Draw_SolidCircle(m_Target, .7f, { 0,0 }, { 1, 0, 0 });
 }
 
-vector<HouseInfo> Plugin::GetHousesInFOV() const
+std::vector<HouseInfo> Plugin::GetHousesInFOV() const
 {
-	vector<HouseInfo> vHousesInFOV = {};
+	std::vector<HouseInfo> vHousesInFOV = {};
 
 	HouseInfo hi = {};
 	for(int i = 0;; ++i)
@@ -233,9 +233,9 @@ vector<HouseInfo> Plugin::GetHousesInFOV() const
 	return vHousesInFOV;
 }
 
-vector<EntityInfo> Plugin::GetEntitiesInFOV() const
+std::vector<EntityInfo> Plugin::GetEntitiesInFOV() const
 {
-	vector<EntityInfo> vEntitiesInFOV = {};
+	std::vector<EntityInfo> vEntitiesInFOV = {};
 
 	EntityInfo ei = {};
 	for(int i = 0;; ++i)
@@ -254,21 +254,24 @@ vector<EntityInfo> Plugin::GetEntitiesInFOV() const
 
 Blackboard* Plugin::CreateBlackboard() const
 {
-	return nullptr;
+	Blackboard* pBlackboard{ new Blackboard() };
+
+	// ADD SLOTS FOR THE VARIABLES HERE
+
+	return pBlackboard;
 }
 
-
-//Blackboard* Plugin::CreateBlackboard()
-//{
-//	return nullptr;
-//}
 
 BehaviorTree* Plugin::CreateBehaviortree(Blackboard* pBlackboard) const
 {
 	return new BehaviorTree(pBlackboard,
 		new BehaviorSelector(
 			{
-
+				new BehaviorSequence(
+				{
+					new BehaviorConditional(BT_Conditions::Test),
+					new BehaviorAction(BT_Actions::Test)
+				})
 			})
-			);
+	);
 }

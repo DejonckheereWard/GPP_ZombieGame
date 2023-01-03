@@ -2,7 +2,10 @@
 #include "stdafx.h"
 #include "EBehaviorTree.h"
 #include "EBlackboard.h"
-#include ""
+#include <Exam_HelperStructs.h>
+
+
+#define BB_AGENT_INFO "agentInfo"
 
 namespace BT_Actions
 {
