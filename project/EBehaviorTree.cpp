@@ -1,6 +1,6 @@
 //=== General Includes ===
 #include "stdafx.h"
-#include "BehaviorTree.h"
+#include "EBehaviorTree.h"
 using namespace Elite;
 
 //-----------------------------------------------------------------
@@ -20,7 +20,8 @@ BehaviorState BehaviorSelector::Execute(Blackboard* pBlackBoard)
 
 		//you can use and if but we use switch case for less lines of code and cleaner
 
-		switch(m_CurrentState) {
+		switch(m_CurrentState)
+		{
 			default:
 			case BehaviorState::Failure:
 				continue;
@@ -49,7 +50,8 @@ BehaviorState BehaviorSequence::Execute(Blackboard* pBlackBoard)
 			//stop looping over all children and return Failed
 		//if a child returns Running:
 			//Running: stop looping and return Running
-		switch(m_CurrentState) {
+		switch(m_CurrentState)
+		{
 			default:
 			case BehaviorState::Success:
 				continue;
@@ -102,12 +104,12 @@ BehaviorState BehaviorConditional::Execute(Blackboard* pBlackBoard)
 		case true:
 			m_CurrentState = BehaviorState::Success;
 			return m_CurrentState;
-		default:
 		case false:
 			m_CurrentState = m_CurrentState = BehaviorState::Failure;
 			return m_CurrentState;
 	}
 
+	return m_CurrentState;
 }
 //-----------------------------------------------------------------
 // BEHAVIOR TREE ACTION (IBehavior)

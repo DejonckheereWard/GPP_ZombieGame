@@ -4,8 +4,10 @@
 
 class IBaseInterface;
 class IExamInterface;
+class BehaviorTree;
+class Blackboard;
 
-class Plugin :public IExamPlugin
+class Plugin:public IExamPlugin
 {
 public:
 	Plugin() {};
@@ -35,6 +37,14 @@ private:
 	float m_AngSpeed = 0.f; //Demo purpose
 
 	UINT m_InventorySlot = 0;
+
+	// Own AI stuff
+	Blackboard* m_pBlackboard;
+	BehaviorTree* m_pBehaviorTree;
+
+
+	Blackboard* CreateBlackboard() const;
+	BehaviorTree* CreateBehaviortree(Blackboard* pBlackboard) const;
 };
 
 //ENTRY

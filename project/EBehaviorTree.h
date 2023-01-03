@@ -8,8 +8,8 @@
 #define ELITE_BEHAVIOR_TREE
 
 //--- Includes ---
-#include "Blackboard.h"
-#include "DecisionMaking.h"
+#include "EBlackboard.h"
+#include "EDecisionMaking.h"
 
 //-----------------------------------------------------------------
 // BEHAVIOR TREE HELPERS
@@ -65,7 +65,9 @@ class BehaviorSelector: public BehaviorComposite
 {
 public:
 	explicit BehaviorSelector(std::vector<IBehavior*> childBehaviors):
-		BehaviorComposite(childBehaviors) {}
+		BehaviorComposite(childBehaviors)
+	{
+	}
 	virtual ~BehaviorSelector() = default;
 
 	virtual BehaviorState Execute(Blackboard* pBlackBoard) override;
@@ -76,7 +78,9 @@ class BehaviorSequence: public BehaviorComposite
 {
 public:
 	explicit BehaviorSequence(std::vector<IBehavior*> childBehaviors):
-		BehaviorComposite(childBehaviors) {}
+		BehaviorComposite(childBehaviors)
+	{
+	}
 	virtual ~BehaviorSequence() = default;
 
 	virtual BehaviorState Execute(Blackboard* pBlackBoard) override;
@@ -87,7 +91,9 @@ class BehaviorPartialSequence: public BehaviorSequence
 {
 public:
 	explicit BehaviorPartialSequence(std::vector<IBehavior*> childBehaviors)
-		: BehaviorSequence(childBehaviors) {}
+		: BehaviorSequence(childBehaviors)
+	{
+	}
 	virtual ~BehaviorPartialSequence() = default;
 
 	virtual BehaviorState Execute(Blackboard* pBlackBoard) override;
@@ -130,7 +136,9 @@ class BehaviorTree final: public IDecisionMaking
 {
 public:
 	explicit BehaviorTree(Blackboard* pBlackBoard, IBehavior* pRootBehavior)
-		: m_pBlackBoard(pBlackBoard), m_pRootBehavior(pRootBehavior) {};
+		: m_pBlackBoard(pBlackBoard), m_pRootBehavior(pRootBehavior)
+	{
+	};
 	~BehaviorTree()
 	{
 		SAFE_DELETE(m_pRootBehavior);

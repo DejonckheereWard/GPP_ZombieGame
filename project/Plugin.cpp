@@ -1,7 +1,8 @@
 #include "stdafx.h"
 #include "Plugin.h"
 #include "IExamInterface.h"
-
+#include "EBehaviorTree.h"
+#include "EBlackboard.h"
 using namespace std;
 
 //Called only once, during initialization
@@ -23,12 +24,18 @@ void Plugin::Initialize(IBaseInterface* pInterface, PluginInfo& info)
 void Plugin::DllInit()
 {
 	//Called when the plugin is loaded
+	m_pBlackboard = CreateBlackboard();
+
+	m_pBehaviorTree = CreateBehaviortree(m_pBlackboard);
+
+
 }
 
 //Called only once
 void Plugin::DllShutdown()
 {
 	//Called wheb the plugin gets unloaded
+	delete m_pBehaviorTree;
 }
 
 //Called only once, during initialization
@@ -124,6 +131,7 @@ SteeringPlugin_Output Plugin::UpdateSteering(float dt)
 	auto agentInfo = m_pInterface->Agent_GetInfo();
 
 
+
 	//Use the navmesh to calculate the next navmesh point
 	//auto nextTargetPos = m_pInterface->NavMesh_GetClosestPathPoint(checkpointLocation);
 
@@ -142,6 +150,7 @@ SteeringPlugin_Output Plugin::UpdateSteering(float dt)
 			//std::cout << "Purge Zone in FOV:" << e.Location.x << ", "<< e.Location.y << "---Radius: "<< zoneInfo.Radius << std::endl;
 		}
 	}
+
 
 	//INVENTORY USAGE DEMO
 	//********************
@@ -241,4 +250,25 @@ vector<EntityInfo> Plugin::GetEntitiesInFOV() const
 	}
 
 	return vEntitiesInFOV;
+}
+
+Blackboard* Plugin::CreateBlackboard() const
+{
+	return nullptr;
+}
+
+
+//Blackboard* Plugin::CreateBlackboard()
+//{
+//	return nullptr;
+//}
+
+BehaviorTree* Plugin::CreateBehaviortree(Blackboard* pBlackboard) const
+{
+	return new BehaviorTree(pBlackboard,
+		new BehaviorSelector(
+			{
+
+			})
+			);
 }

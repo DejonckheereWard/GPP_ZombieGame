@@ -21,11 +21,11 @@ public:
 
 /* --- Data --- */
 //Blackboard
-#include "Blackboard.h"
+#include "EBlackboard.h"
 
 /* --- Decision Making Structures --- */
 //FSM & BT
-#include "BehaviorTree.h"
+#include "EBehaviorTree.h"
 
 
 #endif

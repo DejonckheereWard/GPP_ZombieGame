@@ -3,25 +3,23 @@
   <ItemGroup>
     <ClCompile Include="Plugin.cpp" />
     <ClCompile Include="stdafx.cpp" />
-    <ClCompile Include="BehaviorTree.cpp">
+    <ClCompile Include="EBehaviorTree.cpp">
       <Filter>BehaviourTree</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Plugin.h" />
     <ClInclude Include="stdafx.h" />
-    <ClInclude Include="Behaviors.h">
+    <ClInclude Include="EBehaviorTree.h">
       <Filter>BehaviourTree</Filter>
     </ClInclude>
-    <ClInclude Include="BehaviorTree.h">
+    <ClInclude Include="EBlackboard.h">
       <Filter>BehaviourTree</Filter>
     </ClInclude>
-    <ClInclude Include="Blackboard.h">
+    <ClInclude Include="EDecisionMaking.h">
       <Filter>BehaviourTree</Filter>
     </ClInclude>
-    <ClInclude Include="DecisionMaking.h">
-      <Filter>BehaviourTree</Filter>
-    </ClInclude>
+    <ClInclude Include="Behaviors.h" />
   </ItemGroup>
   <ItemGroup>
     <Filter Include="BehaviourTree">
