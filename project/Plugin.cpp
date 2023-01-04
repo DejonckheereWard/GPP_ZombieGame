@@ -5,6 +5,18 @@
 #include "EBlackboard.h"
 #include "Behaviors.h"
 
+Plugin::Plugin():
+	m_pBehaviorTree{},
+	m_pBlackboard{}
+{
+}
+
+Plugin::~Plugin()
+{
+	//delete m_pBehaviorTree;
+	//delete m_pBlackboard;
+}
+
 //Called only once, during initialization
 void Plugin::Initialize(IBaseInterface* pInterface, PluginInfo& info)
 {
@@ -35,7 +47,6 @@ void Plugin::DllInit()
 void Plugin::DllShutdown()
 {
 	//Called wheb the plugin gets unloaded
-	delete m_pBehaviorTree;
 }
 
 //Called only once, during initialization
@@ -55,7 +66,7 @@ void Plugin::InitGameDebugParams(GameDebugParams& params)
 	params.SpawnPurgeZonesOnMiddleClick = true;
 	params.PrintDebugMessages = true;
 	params.ShowDebugItemNames = true;
-	params.Seed = 36;
+	params.Seed = 63;
 }
 
 //Only Active in DEBUG Mode
@@ -125,6 +136,26 @@ void Plugin::Update(float dt)
 //This function calculates the new SteeringOutput, called once per frame
 SteeringPlugin_Output Plugin::UpdateSteering(float dt)
 {
+	m_pBlackboard->ChangeData(BB_AGENT_INFO_PTR, &m_pInterface->Agent_GetInfo());
+	m_pBlackboard->ChangeData(BB_WORLD_INFO_PTR, &m_pInterface->World_GetInfo());
+	m_pBlackboard->ChangeData(BB_EXAM_INTERFACE_PTR, m_pInterface);
+
+	// Get entities from the fov and store these in the blackboard
+	std::vector<EntityInfo> entitiesInFov{ GetEntitiesInFOV() };
+	m_pBlackboard->ChangeData(BB_ENTITIES_IN_FOV_PTR, &entitiesInFov);
+
+	// Get houses
+	std::vector<HouseInfo> housesInFov{ GetHousesInFOV() };
+	m_pBlackboard->ChangeData(BB_HOUSES_IN_FOV_PTR, &housesInFov);
+
+
+
+	m_pBehaviorTree->Update(dt);
+	//m_pBehaviorTree->GetBlackboard();
+
+	Elite::Vector2 behaviorTarget{};
+	m_pBlackboard->GetData(BB_TARGET_POS, behaviorTarget);
+	m_Target = behaviorTarget;
 	auto steering = SteeringPlugin_Output();
 
 	//Use the Interface (IAssignmentInterface) to 'interface' with the AI_Framework
@@ -136,7 +167,7 @@ SteeringPlugin_Output Plugin::UpdateSteering(float dt)
 	//auto nextTargetPos = m_pInterface->NavMesh_GetClosestPathPoint(checkpointLocation);
 
 	//OR, Use the mouse target
-	auto nextTargetPos = m_pInterface->NavMesh_GetClosestPathPoint(m_Target); //Uncomment this to use mouse position as guidance
+	auto nextTargetPos = m_pInterface->NavMesh_GetClosestPathPoint(behaviorTarget); //Uncomment this to use mouse position as guidance
 
 	auto vHousesInFOV = GetHousesInFOV();//uses m_pInterface->Fov_GetHouseByIndex(...)
 	auto vEntitiesInFOV = GetEntitiesInFOV(); //uses m_pInterface->Fov_GetEntityByIndex(...)
@@ -257,6 +288,15 @@ Blackboard* Plugin::CreateBlackboard() const
 	Blackboard* pBlackboard{ new Blackboard() };
 
 	// ADD SLOTS FOR THE VARIABLES HERE
+	pBlackboard->AddData(BB_AGENT_INFO_PTR, (AgentInfo*)nullptr);
+	pBlackboard->AddData(BB_WORLD_INFO_PTR, (WorldInfo*)nullptr);
+	pBlackboard->AddData(BB_EXAM_INTERFACE_PTR, (IExamInterface*)nullptr);
+	pBlackboard->AddData(BB_ENTITIES_IN_FOV_PTR, (std::vector<EntityInfo>*)nullptr);
+	pBlackboard->AddData(BB_HOUSES_IN_FOV_PTR, (std::vector<HouseInfo>*)nullptr);
+
+	pBlackboard->AddData(BB_ITEM_INFO_PTRS, std::vector<ItemInfo*>{});
+	pBlackboard->AddData(BB_TARGET_POS, Elite::Vector2());
+	pBlackboard->AddData(BB_LOOK_DIRECTION, Elite::Vector2());
 
 	return pBlackboard;
 }
@@ -264,14 +304,36 @@ Blackboard* Plugin::CreateBlackboard() const
 
 BehaviorTree* Plugin::CreateBehaviortree(Blackboard* pBlackboard) const
 {
+	/// <summary>
+	/// 
+	/// </summary>
+	/// <param name="pBlackboard"></param>
+	/// <returns></returns>
 	return new BehaviorTree(pBlackboard,
 		new BehaviorSelector(
 			{
+				new BehaviorSelector({
+					new BehaviorSequence({
+						new BehaviorAction(BT_Actions::GrabClosestItem)
+					}),
+					new BehaviorSequence({
+						new BehaviorConditional(BT_Conditions::ItemInVision),
+						new BehaviorAction(BT_Actions::GoToClosestItem)
+
+					}),
+				}),
+			//new BehaviorAction(BT_ACTIONS::Scan),
+				new BehaviorSequence(
+				{
+					new BehaviorConditional(BT_Conditions::ReachedTarget),
+					new BehaviorAction(BT_Actions::RandomWander),
+				}),
 				new BehaviorSequence(
 				{
 					new BehaviorConditional(BT_Conditions::Test),
 					new BehaviorAction(BT_Actions::Test)
 				})
-			})
+			}
+		)
 	);
 }

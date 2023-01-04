@@ -10,8 +10,8 @@ class Blackboard;
 class Plugin:public IExamPlugin
 {
 public:
-	Plugin() {};
-	virtual ~Plugin() {};
+	Plugin();
+	virtual ~Plugin();
 
 	void Initialize(IBaseInterface* pInterface, PluginInfo& info) override;
 	void DllInit() override;
