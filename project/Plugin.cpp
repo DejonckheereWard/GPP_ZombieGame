@@ -30,17 +30,16 @@ void Plugin::Initialize(IBaseInterface* pInterface, PluginInfo& info)
 	info.Student_FirstName = "Ward";
 	info.Student_LastName = "Dejonckheere";
 	info.Student_Class = "2DAE07";
+
+
+	m_pBlackboard = CreateBlackboard();
+	m_pBehaviorTree = CreateBehaviortree(m_pBlackboard);
 }
 
 //Called only once
 void Plugin::DllInit()
 {
 	//Called when the plugin is loaded
-	m_pBlackboard = CreateBlackboard();
-
-	m_pBehaviorTree = CreateBehaviortree(m_pBlackboard);
-
-
 }
 
 //Called only once
@@ -142,12 +141,6 @@ SteeringPlugin_Output Plugin::UpdateSteering(float dt)
 	CheckForNewHouses();
 	CheckForNewEntities();
 
-
-
-	m_pBlackboard->ChangeData(BB_AGENT_INFO_PTR, &m_pInterface->Agent_GetInfo());
-	m_pBlackboard->ChangeData(BB_WORLD_INFO_PTR, &m_pInterface->World_GetInfo());
-	m_pBlackboard->ChangeData(BB_EXAM_INTERFACE_PTR, m_pInterface);
-
 	// Get entities from the fov and store these in the blackboard
 	std::vector<EntityInfo> entitiesInFov{ GetEntitiesInFOV() };
 	m_pBlackboard->ChangeData(BB_ENTITIES_IN_FOV_PTR, &entitiesInFov);
@@ -162,7 +155,7 @@ SteeringPlugin_Output Plugin::UpdateSteering(float dt)
 	//m_pBehaviorTree->GetBlackboard();
 
 	Elite::Vector2 behaviorTarget{};
-	m_pBlackboard->GetData(BB_TARGET_POS, behaviorTarget);
+	m_pBlackboard->GetData(BB_STEERING_TARGET, behaviorTarget);
 	m_Target = behaviorTarget;
 	auto steering = SteeringPlugin_Output();
 
@@ -296,22 +289,26 @@ Blackboard* Plugin::CreateBlackboard() const
 	Blackboard* pBlackboard{ new Blackboard() };
 
 
+	// INPUT DATA
 	pBlackboard->AddData(BB_HOUSES_PTR, &m_Houses);  // Stores all houses we have seen before
 	pBlackboard->AddData(BB_ITEMS_PTR, &m_Items);
 	pBlackboard->AddData(BB_ENEMIES_PTR, &m_Enemies);
 	pBlackboard->AddData(BB_PURGEZONES_PTR, &m_PurgeZones);
 
+	pBlackboard->AddData(BB_AGENT_INFO_PTR, &m_pInterface->Agent_GetInfo());  // Agent doesnt get hashed
+	pBlackboard->AddData(BB_WORLD_INFO_PTR, &m_pInterface->World_GetInfo());  // Worldinfo doesnt get hashed
+	pBlackboard->AddData(BB_EXAM_INTERFACE_PTR, m_pInterface);
+
+	// OUTPUT DATA
+	pBlackboard->AddData(BB_STEERING_TARGET, Elite::Vector2());
+	pBlackboard->AddData(BB_LOOK_DIRECTION, Elite::Vector2());
 
 	// ADD SLOTS FOR THE VARIABLES HERE - OLD
-	pBlackboard->AddData(BB_AGENT_INFO_PTR, (AgentInfo*)nullptr);
-	pBlackboard->AddData(BB_WORLD_INFO_PTR, (WorldInfo*)nullptr);
-	pBlackboard->AddData(BB_EXAM_INTERFACE_PTR, (IExamInterface*)nullptr);
 	pBlackboard->AddData(BB_ENTITIES_IN_FOV_PTR, (std::vector<EntityInfo>*)nullptr);
 	pBlackboard->AddData(BB_HOUSES_IN_FOV_PTR, (std::vector<HouseInfo>*)nullptr);
 	pBlackboard->AddData(BB_HOUSES_VISITED_PTR, (std::deque<Elite::Vector2>*)nullptr);
 
 	pBlackboard->AddData(BB_ITEM_INFO_PTRS, std::vector<ItemInfo*>{});
-	pBlackboard->AddData(BB_TARGET_POS, Elite::Vector2());
 	pBlackboard->AddData(BB_LOOK_DIRECTION, Elite::Vector2());
 
 	return pBlackboard;

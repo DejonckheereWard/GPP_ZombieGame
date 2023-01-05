@@ -210,6 +210,7 @@ namespace BT_Actions
 			}
 			return BehaviorState::Success;
 		}
+		return BehaviorState::Failure;
 	}
 
 	BehaviorState ScanArea(Blackboard* pBlackboard)
@@ -220,6 +221,7 @@ namespace BT_Actions
 			std::cout << "Failed to change data for: " << BB_SCAN_AREA << "\n";
 			return BehaviorState::Failure;
 		}
+		return BehaviorState::Failure;
 	}
 
 }
@@ -301,5 +303,6 @@ namespace BT_Conditions
 	{
 		// Get the visited house positions
 		//std::vector<Elite::Vector2>* pVisitedHouses;
+		return true;
 	}
 }
