@@ -19,12 +19,22 @@
 
 // OUTPUT VARIABLES
 #define BB_STEERING_TARGET "targetPos"
-#define BB_LOOK_DIRECTION "lookDirection"
-#define BB_SCAN_AREA "scanArea"  // True if we want to rotate to scan this frame (for the scan action)  // Auto resets to false after frame
+//#define BB_LOOK_DIRECTION "lookDirection"
+//#define BB_SCAN_AREA "scanArea"  // True if we want to rotate to scan this frame (for the scan action)  // Auto resets to false after frame
+#define BB_CAN_RUN "canRun"
 
 
 namespace BT_Utils
 {
+	Elite::Vector2 FleeFromTarget(Elite::Vector2 agentPos, Elite::Vector2 target)
+	{
+		// Inverts direction of the target
+		// Returns the target where agent needs to go to to flee
+
+		const Elite::Vector2 invDirection{ agentPos - target };
+		const Elite::Vector2 fleeTarget{ agentPos + invDirection };
+		return fleeTarget;
+	}
 }
 
 using namespace BT_Utils;
@@ -65,15 +75,21 @@ namespace BT_Actions
 			{
 				// Player is within radius of this purgezone
 				averageFleeTarget += purgeZoneInfo.Center;
+				cntFleeTargets++;
 			}
 		}
 		averageFleeTarget /= float(cntFleeTargets);
 
+		const Elite::Vector2 target{ FleeFromTarget(pAgentInfo->Position, averageFleeTarget) };
 
-		// Not sure if this will work, but when fleeing, i dont want to get cornered in a house before realising i need to go around / get stuck
-		// So i set the fleetarget further than required, untill we are out of the zone
+		// Set target in the blackboard
+		if(!pBlackboard->ChangeData(BB_STEERING_TARGET, target))
+			return BehaviorState::Failure;
 
-		return BehaviorState::Failure;
+		if(!pBlackboard->ChangeData(BB_CAN_RUN, true))
+			return BehaviorState::Failure;
+
+		return BehaviorState::Success;
 	}
 
 }
@@ -89,6 +105,7 @@ namespace BT_Conditions
 
 	bool IsInPurgeZone(Blackboard* pBlackboard)
 	{
+		const float radiusMargin{ 5.0f };  // Extra marging around flee zones
 		AgentInfo* pAgentInfo;
 		if(!pBlackboard->GetData(BB_AGENT_INFO_PTR, pAgentInfo) || pAgentInfo == nullptr)
 			return false;
@@ -103,7 +120,7 @@ namespace BT_Conditions
 		for(auto& purgeZoneInfo : *pPurgeZoneInfoVec)
 		{
 			const float distanceToCenterSqr{ (pAgentInfo->Position - purgeZoneInfo.Center).MagnitudeSquared() };
-			if(distanceToCenterSqr < Elite::Square(purgeZoneInfo.Radius))
+			if(distanceToCenterSqr < Elite::Square(purgeZoneInfo.Radius + radiusMargin))
 				return true;
 		}
 

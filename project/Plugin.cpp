@@ -138,15 +138,20 @@ SteeringPlugin_Output Plugin::UpdateSteering(float dt)
 	// This is basically the main update function (the other update is debug only)
 	m_CurrentTime += dt;  // Keep track of total time since program started (used for timestamping events)
 
+	// Reset target before update
+
+	m_pBlackboard->ChangeData(BB_STEERING_TARGET, Elite::Vector2());
+
 	CheckForNewHouses();
 	CheckForNewEntities();
-
+	UpdateEntities();  // Updates and cleans up the storage of entities where needed
+	m_pBlackboard->ChangeData(BB_AGENT_INFO_PTR, &m_pInterface->Agent_GetInfo());
 	m_pBehaviorTree->Update(dt);
-	//m_pBehaviorTree->GetBlackboard();
+
+	UpdateOutputVariables(m_pBlackboard);  // Copies output variables into the member variables as needed
 
 	Elite::Vector2 behaviorTarget{};
 	m_pBlackboard->GetData(BB_STEERING_TARGET, behaviorTarget);
-	m_Target = behaviorTarget;
 	auto steering = SteeringPlugin_Output();
 
 	//Use the Interface (IAssignmentInterface) to 'interface' with the AI_Framework
@@ -160,49 +165,6 @@ SteeringPlugin_Output Plugin::UpdateSteering(float dt)
 	//OR, Use the mouse target
 	auto nextTargetPos = m_pInterface->NavMesh_GetClosestPathPoint(behaviorTarget); //Uncomment this to use mouse position as guidance
 
-	auto vHousesInFOV = GetHousesInFOV();//uses m_pInterface->Fov_GetHouseByIndex(...)
-	auto vEntitiesInFOV = GetEntitiesInFOV(); //uses m_pInterface->Fov_GetEntityByIndex(...)
-
-	for(auto& e : vEntitiesInFOV)
-	{
-		if(e.Type == eEntityType::PURGEZONE)
-		{
-			PurgeZoneInfo zoneInfo;
-			m_pInterface->PurgeZone_GetInfo(e, zoneInfo);
-			//std::cout << "Purge Zone in FOV:" << e.Location.x << ", "<< e.Location.y << "---Radius: "<< zoneInfo.Radius << std::endl;
-		}
-	}
-
-
-	//INVENTORY USAGE DEMO
-	//********************
-
-	if(m_GrabItem)
-	{
-		ItemInfo item;
-		//Item_Grab > When DebugParams.AutoGrabClosestItem is TRUE, the Item_Grab function returns the closest item in range
-		//Keep in mind that DebugParams are only used for debugging purposes, by default this flag is FALSE
-		//Otherwise, use GetEntitiesInFOV() to retrieve a vector of all entities in the FOV (EntityInfo)
-		//Item_Grab gives you the ItemInfo back, based on the passed EntityHash (retrieved by GetEntitiesInFOV)
-		if(m_pInterface->Item_Grab({}, item))
-		{
-			//Once grabbed, you can add it to a specific inventory slot
-			//Slot must be empty
-			m_pInterface->Inventory_AddItem(m_InventorySlot, item);
-		}
-	}
-
-	if(m_UseItem)
-	{
-		//Use an item (make sure there is an item at the given inventory slot)
-		m_pInterface->Inventory_UseItem(m_InventorySlot);
-	}
-
-	if(m_RemoveItem)
-	{
-		//Remove an item from a inventory slot
-		m_pInterface->Inventory_RemoveItem(m_InventorySlot);
-	}
 
 	//Simple Seek Behaviour (towards Target)
 	steering.LinearVelocity = nextTargetPos - agentInfo.Position; //Desired Velocity
@@ -216,15 +178,8 @@ SteeringPlugin_Output Plugin::UpdateSteering(float dt)
 
 	//steering.AngularVelocity = m_AngSpeed; //Rotate your character to inspect the world while walking
 	steering.AutoOrient = true; //Setting AutoOrient to TRue overrides the AngularVelocity
-
 	steering.RunMode = m_CanRun; //If RunMode is True > MaxLinSpd is increased for a limited time (till your stamina runs out)
 
-	//SteeringPlugin_Output is works the exact same way a SteeringBehaviour output
-
-//@End (Demo Purposes)
-	m_GrabItem = false; //Reset State
-	m_UseItem = false;
-	m_RemoveItem = false;
 
 	return steering;
 }
@@ -290,9 +245,9 @@ Blackboard* Plugin::CreateBlackboard()
 	pBlackboard->AddData(BB_EXAM_INTERFACE_PTR, m_pInterface);
 
 	// OUTPUT DATA
-	pBlackboard->AddData(BB_STEERING_TARGET, Elite::Vector2());
-	pBlackboard->AddData(BB_LOOK_DIRECTION, Elite::Vector2());
-
+	pBlackboard->AddData(BB_STEERING_TARGET, m_SteeringTarget);
+	pBlackboard->AddData(BB_CAN_RUN, m_CanRun);
+	//pBlackboard->AddData(BB_LOOK_DIRECTION, Elite::Vector2());
 
 	return pBlackboard;
 }
@@ -310,10 +265,104 @@ BehaviorTree* Plugin::CreateBehaviortree(Blackboard* pBlackboard) const
 	// Ex. Running away from enemy has a higher priority than going to a house
 	return new BehaviorTree(m_pBlackboard,
 		new BehaviorSelector({
+			// Purge zones
 			new BehaviorSequence({
 				new BehaviorConditional(BT_Conditions::IsInPurgeZone),
 				new BehaviorAction(BT_Actions::FleeFromPurgeZones)
 			}),
+
+			// Healing
+			new BehaviorSequence({
+				new BehaviorConditional(BT_Conditions::LowHealth),
+				new BehaviorConditional(BT_Conditions::HasMedkit),
+				new BehaviorAction(BT_Actions::UseMedkit),
+			}),
+
+			// Eating
+			new BehaviorSequence({
+				new BehaviorConditional(BT_Conditions::LowFood),
+				new BehaviorConditional(BT_Conditions::HasFood),
+				new BehaviorAction(BT_Conditions::UseFood)
+			}),
+
+			// Enemies
+			new BehaviorSequence({
+				new BehaviorConditional(BT_Conditions::EnemyNearby),
+				new BehaviorSelector({
+					new BehaviorSequence({
+						new BehaviorConditional(BT_Conditions::WeaponInInventory),
+						new BehaviorConditional(BT_Conditions::HasAmmo),
+						new BehaviorAction(BT_Actions::ShootEnemy)  // LOOK AT + USE WEAPON
+					}),
+					new BehaviorAction(BT_Actions::FleeFromEnemies)
+				})
+			}),
+
+			// Searching area
+			new BehaviorSequence({
+				// Check items
+				new BehaviorSelector({
+					// Weapons (Might need to split up into shotgun and pistol)
+					new BehaviorSequence({
+						// Check if there is a weapon nearby
+						new BehaviorConditional(BT_Conditions::WeaponNearby),
+						new BehaviorSelector({
+							// Check if we already have a weapon, or if we are low on ammo
+							new BehaviorConditional(BT_Conditions::HasWeaponSpace),
+							new BehaviorConditional(BT_Conditions::LowAmmo),
+						}),
+						new BehaviorAction(BT_Actions::GrabClosestWeapon)
+					}),
+
+					// Food
+					new BehaviorSequence({
+						new BehaviorConditional(BT_Conditions::FoodNearby),
+						new BehaviorSelector({
+							new BehaviorSequence({
+								new BehaviorConditional(BT_Conditions::HasFoodSpace),
+								new BehaviorAction(BT_Conditions::GrabClosestFood)
+							}),
+							new BehaviorSequence({
+								new BehaviorConditional(BT_Conditions::IsSlightlyHungry),  // True if player lost a little of energy, but its not low
+								new BehaviorAction(BT_Conditions::UseFood),
+								new BehaviorAction(BT_Conditions::GrabClosestFood)
+							})
+						})
+					}),
+
+					// Medkits
+					new BehaviorSequence({
+						new BehaviorConditional(BT_Conditions::MedkitNearby),
+						new BehaviorSelector({
+							new BehaviorSequence({
+								new BehaviorConditional(BT_Conditions::HasMedkitSpace),
+								new BehaviorAction(BT_Conditions::GrabClosestMedkit),
+							}),
+							new BehaviorSequence({
+								new BehaviorConditional(BT_Conditions::IsSlightlyDamaged),
+								new BehaviorAction(BT_Actions::UseMedkit),
+								new BehaviorAction(BT_Actions::GrabClosestMedkit)
+							})
+						}),
+
+						new BehaviorConditional(BT_Conditions::IsSlightlyDamaged)  // True if player could use medkit but not imediate
+					})
+				})
+			}),
+
+			// No items nearby, no immediate things to do, so we need to find new stuff
+			// If we know about any unvisited houses, go visit them and search them
+			// If we dont, we need to roam the map, also notice how the map has a limited radius of where the houses spawn, so stay in there
+			new BehaviorSequence({
+				new BehaviorConditional(BT_Conditions::UnvisitedHouseNearby),
+				new BehaviorAction(BT_Conditions::GoToClosestUnvisitedHouse)
+			}),
+
+			new BehaviorSequence({
+				new BehaviorAction(BT_Actions::GoToNextWanderPoint)  // Try to make agent go to places it hasnt gone to yet, could use spatial map
+			}),
+
+			// Shouldnt be reaching this if any of previous worked.
 			new BehaviorSequence({
 				// Only if condition returns true, will the next node be executed  (For sequences)
 				new BehaviorConditional(BT_Conditions::Test),
@@ -362,24 +411,13 @@ void Plugin::CheckForNewEntities()
 		switch(entity.Type)
 		{
 			case eEntityType::ITEM:
-			{
-				// Check if we have seen this item before
-				for(const ItemInfo& existingItem : m_Items)
-				{
-					if(entity.Location == existingItem.Location)
-					{
-						break;
-					}
-				}
-
-
-
-
+				HandleNewItem(entity);
 				break;
-			}
 			case eEntityType::ENEMY:
+				HandleNewEnemy(entity);
 				break;
 			case eEntityType::PURGEZONE:
+				HandleNewPurgeZone(entity);
 				break;
 			default:
 				break;
@@ -414,9 +452,6 @@ void Plugin::HandleNewItem(const EntityInfo& entityInfo)
 void Plugin::HandleNewEnemy(const EntityInfo& entityInfo)
 {
 	// We always want to add enemies to the vector, since they move and their location changes
-	// Old enemies will have to be removed from the vector when their last seen time is too long ago
-
-	const float maxTimeSinceLastSeen = 2.f;
 
 	// Get the data from this enemy
 	EnemyInfo enemyInfo{};
@@ -426,21 +461,10 @@ void Plugin::HandleNewEnemy(const EntityInfo& entityInfo)
 	extendedInfo.LastSeenTime = m_CurrentTime;  // Add the current time as timestamp
 	m_Enemies.push_back(extendedInfo);
 
-
-	// Delete enemies that are too old
-	// Loop in reverse to prevent skipping when a delete happens
-	for(int i = m_Enemies.size() - 1; i >= 0; --i)
-	{
-		if(m_CurrentTime - m_Enemies[i].LastSeenTime > maxTimeSinceLastSeen)
-		{
-			m_Enemies.erase(m_Enemies.begin() + i);
-		}
-	}
 }
 
 void Plugin::HandleNewPurgeZone(const EntityInfo& entityInfo)
 {
-	const float purgeZoneDuration{ 5.0f };  // Time before deleting the purgezone
 
 	// Check if we havent found this purge zone already
 	for(const PurgeZoneInfoExtended& existingPurgeZone : m_PurgeZones)
@@ -462,9 +486,54 @@ void Plugin::HandleNewPurgeZone(const EntityInfo& entityInfo)
 	// Add the purge zone to the list
 	m_PurgeZones.push_back(extendedInfo);
 
+
+
+}
+
+void Plugin::UpdateEntities()
+{
 	// Delete purge zones that have expired
 	// Loop in reverse to prevent skipping when a delete happens
+	const float purgeZoneDuration{ 8.0f };  // Time before deleting the purgezone
+	for(int i = m_PurgeZones.size() - 1; i >= 0; --i)
+	{
+		if(m_CurrentTime - m_PurgeZones[i].DetectionTime > purgeZoneDuration)
+		{
+			m_PurgeZones.erase(m_PurgeZones.begin() + i);
+		}
+	}
 
 
+	// Old enemies will have to be removed from the vector when their last seen time is too long ago
+	// Delete enemies that are too old
+	// Loop in reverse to prevent skipping when a delete happens
+	const float maxTimeSinceLastSeenEnemy = 2.f;
+	for(int i = m_Enemies.size() - 1; i >= 0; --i)
+	{
+		if(m_CurrentTime - m_Enemies[i].LastSeenTime > maxTimeSinceLastSeenEnemy)
+		{
+			m_Enemies.erase(m_Enemies.begin() + i);
+		}
+	}
 
+}
+
+void Plugin::UpdateOutputVariables(Blackboard* pBlackboard)
+{
+	// Updates the output variables since they arent passed by pointer
+	bool result{ true };
+	result &= pBlackboard->GetData(BB_STEERING_TARGET, m_SteeringTarget);
+	result &= pBlackboard->GetData(BB_CAN_RUN, m_CanRun);
+
+	if(!result)
+	{
+		std::cout << "FAILED TO UPDATE OUTPUT VARIABLES\n";
+	}
+
+}
+
+void Plugin::ResetOutputVariables()
+{
+	m_SteeringTarget = m_pInterface->Agent_GetInfo().Position;  // Reset to current position, not 0
+	m_CanRun = false;
 }

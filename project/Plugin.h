@@ -31,7 +31,6 @@ private:
 	std::vector<EntityInfo> GetEntitiesInFOV() const;
 
 	Elite::Vector2 m_Target = {};
-	bool m_CanRun = false; //Demo purpose
 	bool m_GrabItem = false; //Demo purpose
 	bool m_UseItem = false; //Demo purpose
 	bool m_RemoveItem = false; //Demo purpose
@@ -45,11 +44,17 @@ private:
 	Blackboard* m_pBlackboard;
 	BehaviorTree* m_pBehaviorTree;
 
-	// DATA STORAGE
+	// DATA STORAGE (Inputed in blackboard for the behaviortree to act on)
 	std::vector<HouseInfoExtended> m_Houses;
 	std::vector<ItemInfo> m_Items;
 	std::vector<EnemyInfoExtended> m_Enemies;
 	std::vector<PurgeZoneInfoExtended> m_PurgeZones;
+
+	// OUTPUT VARS (Changed by the behaviortree for the plugin to act on)
+	Elite::Vector2 m_SteeringTarget{};
+	bool m_CanRun = false;
+
+
 
 	Blackboard* CreateBlackboard();
 	BehaviorTree* CreateBehaviortree(Blackboard* pBlackboard) const;
@@ -60,6 +65,10 @@ private:
 	void HandleNewItem(const EntityInfo& entityInfo);
 	void HandleNewEnemy(const EntityInfo& entityInfo);
 	void HandleNewPurgeZone(const EntityInfo& entityInfo);
+	void UpdateEntities();
+
+	void UpdateOutputVariables(Blackboard* pBlackboard);
+	void ResetOutputVariables();
 };
 
 //ENTRY
