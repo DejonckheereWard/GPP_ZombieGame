@@ -51,13 +51,11 @@ private:
 	std::vector<EnemyInfoExtended> m_Enemies;
 	std::vector<PurgeZoneInfoExtended> m_PurgeZones;
 
-
-
-	Blackboard* CreateBlackboard() const;
+	Blackboard* CreateBlackboard();
 	BehaviorTree* CreateBehaviortree(Blackboard* pBlackboard) const;
 
-	void CheckForNewHouses();
 
+	void CheckForNewHouses();
 	void CheckForNewEntities();
 	void HandleNewItem(const EntityInfo& entityInfo);
 	void HandleNewEnemy(const EntityInfo& entityInfo);

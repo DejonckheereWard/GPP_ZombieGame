@@ -141,16 +141,6 @@ SteeringPlugin_Output Plugin::UpdateSteering(float dt)
 	CheckForNewHouses();
 	CheckForNewEntities();
 
-	// Get entities from the fov and store these in the blackboard
-	std::vector<EntityInfo> entitiesInFov{ GetEntitiesInFOV() };
-	m_pBlackboard->ChangeData(BB_ENTITIES_IN_FOV_PTR, &entitiesInFov);
-
-	// Get houses
-	std::vector<HouseInfo> housesInFov{ GetHousesInFOV() };
-	m_pBlackboard->ChangeData(BB_HOUSES_IN_FOV_PTR, &housesInFov);
-
-
-
 	m_pBehaviorTree->Update(dt);
 	//m_pBehaviorTree->GetBlackboard();
 
@@ -284,7 +274,7 @@ std::vector<EntityInfo> Plugin::GetEntitiesInFOV() const
 	return vEntitiesInFOV;
 }
 
-Blackboard* Plugin::CreateBlackboard() const
+Blackboard* Plugin::CreateBlackboard()
 {
 	Blackboard* pBlackboard{ new Blackboard() };
 
@@ -303,13 +293,6 @@ Blackboard* Plugin::CreateBlackboard() const
 	pBlackboard->AddData(BB_STEERING_TARGET, Elite::Vector2());
 	pBlackboard->AddData(BB_LOOK_DIRECTION, Elite::Vector2());
 
-	// ADD SLOTS FOR THE VARIABLES HERE - OLD
-	pBlackboard->AddData(BB_ENTITIES_IN_FOV_PTR, (std::vector<EntityInfo>*)nullptr);
-	pBlackboard->AddData(BB_HOUSES_IN_FOV_PTR, (std::vector<HouseInfo>*)nullptr);
-	pBlackboard->AddData(BB_HOUSES_VISITED_PTR, (std::deque<Elite::Vector2>*)nullptr);
-
-	pBlackboard->AddData(BB_ITEM_INFO_PTRS, std::vector<ItemInfo*>{});
-	pBlackboard->AddData(BB_LOOK_DIRECTION, Elite::Vector2());
 
 	return pBlackboard;
 }
@@ -322,32 +305,22 @@ BehaviorTree* Plugin::CreateBehaviortree(Blackboard* pBlackboard) const
 	/// </summary>
 	/// <param name="pBlackboard"></param>
 	/// <returns></returns>
-	return new BehaviorTree(m_pBlackboard,
-		new BehaviorSelector(
-			{
-				new BehaviorSelector({
-					new BehaviorSequence({
-						new BehaviorAction(BT_Actions::GrabClosestItem)
-					}),
-					new BehaviorSequence({
-						new BehaviorConditional(BT_Conditions::ItemInVision),
-						new BehaviorAction(BT_Actions::GoToClosestItem)
 
-					}),
-				}),
-			//new BehaviorAction(BT_ACTIONS::Scan),
-				new BehaviorSequence(
-				{
-					new BehaviorConditional(BT_Conditions::ReachedTarget),
-					new BehaviorAction(BT_Actions::RandomWander),
-				}),
-				new BehaviorSequence(
-				{
-					new BehaviorConditional(BT_Conditions::Test),
-					new BehaviorAction(BT_Actions::Test)
-				})
-			}
-		)
+	// Order of the behaviortree should be from highest priority to lowest priority
+	// Ex. Running away from enemy has a higher priority than going to a house
+	return new BehaviorTree(m_pBlackboard,
+		new BehaviorSelector({
+			new BehaviorSequence({
+				new BehaviorConditional(BT_Conditions::IsInPurgeZone),
+				new BehaviorAction(BT_Actions::FleeFromPurgeZones)
+			}),
+			new BehaviorSequence({
+				// Only if condition returns true, will the next node be executed  (For sequences)
+				new BehaviorConditional(BT_Conditions::Test),
+				new BehaviorAction(BT_Actions::Test)
+			}),
+
+			})
 	);
 }
 
@@ -470,7 +443,7 @@ void Plugin::HandleNewPurgeZone(const EntityInfo& entityInfo)
 	const float purgeZoneDuration{ 5.0f };  // Time before deleting the purgezone
 
 	// Check if we havent found this purge zone already
-	for(const PurgeZoneInfo& existingPurgeZone : m_PurgeZones)
+	for(const PurgeZoneInfoExtended& existingPurgeZone : m_PurgeZones)
 	{
 		if(entityInfo.Location == existingPurgeZone.Center)
 		{
