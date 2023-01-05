@@ -20,6 +20,7 @@
       <Filter>BehaviourTree</Filter>
     </ClInclude>
     <ClInclude Include="Behaviors.h" />
+    <ClInclude Include="DataExtensions.h" />
   </ItemGroup>
   <ItemGroup>
     <Filter Include="BehaviourTree">

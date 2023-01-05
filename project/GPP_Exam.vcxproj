@@ -183,6 +183,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="Behaviors.h" />
+    <ClInclude Include="DataExtensions.h" />
     <ClInclude Include="EBehaviorTree.h" />
     <ClInclude Include="EBlackboard.h" />
     <ClInclude Include="EDecisionMaking.h" />
