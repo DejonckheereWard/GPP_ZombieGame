@@ -293,6 +293,7 @@ Blackboard* Plugin::CreateBlackboard() const
 	pBlackboard->AddData(BB_EXAM_INTERFACE_PTR, (IExamInterface*)nullptr);
 	pBlackboard->AddData(BB_ENTITIES_IN_FOV_PTR, (std::vector<EntityInfo>*)nullptr);
 	pBlackboard->AddData(BB_HOUSES_IN_FOV_PTR, (std::vector<HouseInfo>*)nullptr);
+	pBlackboard->AddData(BB_HOUSES_VISITED_PTR, (std::deque<Elite::Vector2>*)nullptr);
 
 	pBlackboard->AddData(BB_ITEM_INFO_PTRS, std::vector<ItemInfo*>{});
 	pBlackboard->AddData(BB_TARGET_POS, Elite::Vector2());
