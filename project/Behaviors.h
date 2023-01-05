@@ -4,6 +4,14 @@
 #include "EBlackboard.h"
 #include <Exam_HelperStructs.h>
 
+
+// DATA
+#define BB_HOUSES_PTR "pHouses"
+#define BB_ITEMS_PTR "pItems"  // Not Extended
+#define BB_ENEMIES_PTR "pEnemies"
+#define BB_PURGEZONES_PTR "pPurgeZones"
+
+
 // INPUT
 #define BB_AGENT_INFO_PTR "pAgentInfo"
 #define BB_WORLD_INFO_PTR "pWorldInfo"
@@ -11,7 +19,6 @@
 #define BB_HOUSES_IN_FOV_PTR "pHousesInFov"
 #define BB_HOUSES_VISITED_PTR "pHousesVisitedQueue"
 
-#define BB_SCAN_AREA "scanArea"  // True if we want to rotate to scan this frame (for the scan action)  // Auto resets to false after frame
 
 
 #define BB_ITEM_INFO_PTRS "pItemInfoPtrs" // Vector of Item Info Ptrs
@@ -20,6 +27,7 @@
 // OUTPUT
 #define BB_TARGET_POS "targetPos"
 #define BB_LOOK_DIRECTION "lookDirection"
+#define BB_SCAN_AREA "scanArea"  // True if we want to rotate to scan this frame (for the scan action)  // Auto resets to false after frame
 
 
 namespace BT_Utils
@@ -292,6 +300,6 @@ namespace BT_Conditions
 	bool IsHousePosVisited(Blackboard* pBlackboard)
 	{
 		// Get the visited house positions
-		std::vector<Elite::Vector2>* pVisitedHouses;
+		//std::vector<Elite::Vector2>* pVisitedHouses;
 	}
 }

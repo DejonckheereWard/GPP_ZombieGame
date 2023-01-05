@@ -136,6 +136,14 @@ void Plugin::Update(float dt)
 //This function calculates the new SteeringOutput, called once per frame
 SteeringPlugin_Output Plugin::UpdateSteering(float dt)
 {
+	// This is basically the main update function (the other update is debug only)
+	m_CurrentTime += dt;  // Keep track of total time since program started (used for timestamping events)
+
+	CheckForNewHouses();
+	CheckForNewEntities();
+
+
+
 	m_pBlackboard->ChangeData(BB_AGENT_INFO_PTR, &m_pInterface->Agent_GetInfo());
 	m_pBlackboard->ChangeData(BB_WORLD_INFO_PTR, &m_pInterface->World_GetInfo());
 	m_pBlackboard->ChangeData(BB_EXAM_INTERFACE_PTR, m_pInterface);
@@ -287,7 +295,14 @@ Blackboard* Plugin::CreateBlackboard() const
 {
 	Blackboard* pBlackboard{ new Blackboard() };
 
-	// ADD SLOTS FOR THE VARIABLES HERE
+
+	pBlackboard->AddData(BB_HOUSES_PTR, &m_Houses);  // Stores all houses we have seen before
+	pBlackboard->AddData(BB_ITEMS_PTR, &m_Items);
+	pBlackboard->AddData(BB_ENEMIES_PTR, &m_Enemies);
+	pBlackboard->AddData(BB_PURGEZONES_PTR, &m_PurgeZones);
+
+
+	// ADD SLOTS FOR THE VARIABLES HERE - OLD
 	pBlackboard->AddData(BB_AGENT_INFO_PTR, (AgentInfo*)nullptr);
 	pBlackboard->AddData(BB_WORLD_INFO_PTR, (WorldInfo*)nullptr);
 	pBlackboard->AddData(BB_EXAM_INTERFACE_PTR, (IExamInterface*)nullptr);
@@ -310,7 +325,7 @@ BehaviorTree* Plugin::CreateBehaviortree(Blackboard* pBlackboard) const
 	/// </summary>
 	/// <param name="pBlackboard"></param>
 	/// <returns></returns>
-	return new BehaviorTree(pBlackboard,
+	return new BehaviorTree(m_pBlackboard,
 		new BehaviorSelector(
 			{
 				new BehaviorSelector({
@@ -337,4 +352,149 @@ BehaviorTree* Plugin::CreateBehaviortree(Blackboard* pBlackboard) const
 			}
 		)
 	);
+}
+
+void Plugin::CheckForNewHouses()
+{
+	// Get all houses in FOV
+	std::vector<HouseInfo> housesInFov = GetHousesInFOV();
+
+	// Check if we have seen this house before
+	for(const HouseInfo& houseInFov : housesInFov)
+	{
+		bool alreadyFound = false;
+		for(const HouseInfoExtended& existingHouse : m_Houses)
+		{
+			if(houseInFov.Center == existingHouse.Center)
+			{
+				alreadyFound = true;
+				break;
+			}
+		}
+
+		// If we haven't seen this house before, add it to the list
+		if(!alreadyFound)
+		{
+			HouseInfoExtended house{ houseInFov };
+			m_Houses.push_back(house);
+		}
+	}
+}
+
+void Plugin::CheckForNewEntities()
+{
+	// Get all entities in the fov
+
+	std::vector<EntityInfo> entitiesInFov = GetEntitiesInFOV();
+
+	for(const EntityInfo& entity : entitiesInFov)
+	{
+		switch(entity.Type)
+		{
+			case eEntityType::ITEM:
+			{
+				// Check if we have seen this item before
+				for(const ItemInfo& existingItem : m_Items)
+				{
+					if(entity.Location == existingItem.Location)
+					{
+						break;
+					}
+				}
+
+
+
+
+				break;
+			}
+			case eEntityType::ENEMY:
+				break;
+			case eEntityType::PURGEZONE:
+				break;
+			default:
+				break;
+		}
+	}
+
+
+}
+
+void Plugin::HandleNewItem(const EntityInfo& entityInfo)
+{
+	// Check if we havent found this item already
+	for(const ItemInfo& existingItem : m_Items)
+	{
+		if(entityInfo.Location == existingItem.Location)
+		{
+			return;
+		}
+	}
+
+	// If we havent found this item already, add it to the list
+	// First get the data using the interface
+	ItemInfo itemInfo{};
+	m_pInterface->Item_GetInfo(entityInfo, itemInfo);
+
+	// Add the item to the list
+	m_Items.push_back(itemInfo);
+
+
+}
+
+void Plugin::HandleNewEnemy(const EntityInfo& entityInfo)
+{
+	// We always want to add enemies to the vector, since they move and their location changes
+	// Old enemies will have to be removed from the vector when their last seen time is too long ago
+
+	const float maxTimeSinceLastSeen = 2.f;
+
+	// Get the data from this enemy
+	EnemyInfo enemyInfo{};
+	m_pInterface->Enemy_GetInfo(entityInfo, enemyInfo);
+
+	EnemyInfoExtended extendedInfo{ enemyInfo };
+	extendedInfo.LastSeenTime = m_CurrentTime;  // Add the current time as timestamp
+	m_Enemies.push_back(extendedInfo);
+
+
+	// Delete enemies that are too old
+	// Loop in reverse to prevent skipping when a delete happens
+	for(int i = m_Enemies.size() - 1; i >= 0; --i)
+	{
+		if(m_CurrentTime - m_Enemies[i].LastSeenTime > maxTimeSinceLastSeen)
+		{
+			m_Enemies.erase(m_Enemies.begin() + i);
+		}
+	}
+}
+
+void Plugin::HandleNewPurgeZone(const EntityInfo& entityInfo)
+{
+	const float purgeZoneDuration{ 5.0f };  // Time before deleting the purgezone
+
+	// Check if we havent found this purge zone already
+	for(const PurgeZoneInfo& existingPurgeZone : m_PurgeZones)
+	{
+		if(entityInfo.Location == existingPurgeZone.Center)
+		{
+			return;
+		}
+	}
+
+	// If we havent found this purge zone already, add it to the list
+	// First get the data using the interface
+	PurgeZoneInfo purgeZoneInfo{};
+	m_pInterface->PurgeZone_GetInfo(entityInfo, purgeZoneInfo);
+	PurgeZoneInfoExtended extendedInfo{ purgeZoneInfo };
+
+	extendedInfo.DetectionTime = m_CurrentTime;
+
+	// Add the purge zone to the list
+	m_PurgeZones.push_back(extendedInfo);
+
+	// Delete purge zones that have expired
+	// Loop in reverse to prevent skipping when a delete happens
+
+
+
 }

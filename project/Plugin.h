@@ -1,6 +1,7 @@
 #pragma once
 #include "IExamPlugin.h"
 #include "Exam_HelperStructs.h"
+#include "DataExtensions.h"
 
 class IBaseInterface;
 class IExamInterface;
@@ -38,13 +39,29 @@ private:
 
 	UINT m_InventorySlot = 0;
 
+	float m_CurrentTime = 0.0f;  // Holds track of the current time, increased every time updatesteering is called;
+
 	// Own AI stuff
 	Blackboard* m_pBlackboard;
 	BehaviorTree* m_pBehaviorTree;
 
+	// DATA STORAGE
+	std::vector<HouseInfoExtended> m_Houses;
+	std::vector<ItemInfo> m_Items;
+	std::vector<EnemyInfoExtended> m_Enemies;
+	std::vector<PurgeZoneInfoExtended> m_PurgeZones;
+
+
 
 	Blackboard* CreateBlackboard() const;
 	BehaviorTree* CreateBehaviortree(Blackboard* pBlackboard) const;
+
+	void CheckForNewHouses();
+
+	void CheckForNewEntities();
+	void HandleNewItem(const EntityInfo& entityInfo);
+	void HandleNewEnemy(const EntityInfo& entityInfo);
+	void HandleNewPurgeZone(const EntityInfo& entityInfo);
 };
 
 //ENTRY
