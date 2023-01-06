@@ -310,12 +310,12 @@ BehaviorTree* Plugin::CreateBehaviortree(Blackboard* pBlackboard) const
 						new BehaviorSelector({
 							// Check if we already have a weapon, or if we are low on ammo
 							new BehaviorConditional(BT_Conditions::HasPistol),
-							//new BehaviorAction(BT_Actions::GrabClosestPistol)
+							new BehaviorAction(BT_Actions::GrabClosestPistol)
 						}),
 						new BehaviorSequence({
 							new BehaviorConditional(BT_Conditions::HasPistol),
 							new BehaviorConditional(BT_Conditions::LowPistolAmmo),
-							//new BehaviorAction(BT_Actions::GrabClosestPistol)  // GOTO + GRAB IF IN RANGE
+							new BehaviorAction(BT_Actions::GrabClosestPistol)  // GOTO + GRAB IF IN RANGE
 						})
 					}),
 					new BehaviorSequence({
@@ -324,12 +324,12 @@ BehaviorTree* Plugin::CreateBehaviortree(Blackboard* pBlackboard) const
 						new BehaviorSelector({
 							// Check if we already have a weapon, or if we are low on ammo
 							new BehaviorConditional(BT_Conditions::HasShotgun),
-							//new BehaviorAction(BT_Actions::GrabClosestShotgun)
+							new BehaviorAction(BT_Actions::GrabClosestShotgun)
 						}),
 						new BehaviorSequence({
 							new BehaviorConditional(BT_Conditions::HasShotgun),
 							new BehaviorConditional(BT_Conditions::LowShotgunAmmo),
-							//new BehaviorAction(BT_Actions::GrabClosestShotgun)  // GOTO + GRAB IF IN RANGE
+							new BehaviorAction(BT_Actions::GrabClosestShotgun)  // GOTO + GRAB IF IN RANGE
 						})
 					}),
 
@@ -339,12 +339,12 @@ BehaviorTree* Plugin::CreateBehaviortree(Blackboard* pBlackboard) const
 						new BehaviorSelector({
 							new BehaviorSelector({
 								new BehaviorConditional(BT_Conditions::HasFood),  // By using selector, grabclosestfood will only exec if hasfood is false
-								//new BehaviorAction(BT_Conditions::GrabClosestFood)
+								new BehaviorAction(BT_Actions::GrabClosestFood)
 							}),
 							new BehaviorSequence({
 								new BehaviorConditional(BT_Conditions::SlightlyUsedEnergy),  // True if player lost a little of energy, but its not low
 								new BehaviorAction(BT_Actions::UseFood),
-								//new BehaviorAction(BT_Conditions::GrabClosestFood)
+								new BehaviorAction(BT_Actions::GrabClosestFood)
 							})
 						})
 					}),
@@ -355,12 +355,12 @@ BehaviorTree* Plugin::CreateBehaviortree(Blackboard* pBlackboard) const
 						new BehaviorSelector({
 							new BehaviorSelector({
 								new BehaviorConditional(BT_Conditions::HasMedkit),
-								//new BehaviorAction(BT_Conditions::GrabClosestMedkit),
+								new BehaviorAction(BT_Actions::GrabClosestMedkit),
 							}),
 							new BehaviorSequence({
 								new BehaviorConditional(BT_Conditions::SlightlyDamaged),
 								new BehaviorAction(BT_Actions::UseMedkit),
-								//new BehaviorAction(BT_Actions::GrabClosestMedkit)
+								new BehaviorAction(BT_Actions::GrabClosestMedkit)
 							})
 						}),
 					})
@@ -447,10 +447,11 @@ void Plugin::CheckForNewEntities()
 void Plugin::HandleNewItem(const EntityInfo& entityInfo)
 {
 	// Check if we havent found this item already
-	for(const ItemInfo& existingItem : m_Items)
+	for(ItemInfo& existingItem : m_Items)
 	{
 		if(entityInfo.Location == existingItem.Location)
 		{
+			existingItem.ItemHash = entityInfo.EntityHash;
 			return;
 		}
 	}
@@ -484,10 +485,11 @@ void Plugin::HandleNewPurgeZone(const EntityInfo& entityInfo)
 {
 
 	// Check if we havent found this purge zone already
-	for(const PurgeZoneInfoExtended& existingPurgeZone : m_PurgeZones)
+	for(PurgeZoneInfoExtended& existingPurgeZone : m_PurgeZones)
 	{
 		if(entityInfo.Location == existingPurgeZone.Center)
 		{
+			existingPurgeZone.ZoneHash = entityInfo.EntityHash;
 			return;
 		}
 	}

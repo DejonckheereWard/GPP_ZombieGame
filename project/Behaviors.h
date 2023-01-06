@@ -107,19 +107,64 @@ namespace BT_Actions
 		if(!pBlackboard->GetData(BB_AGENT_INFO_PTR, pAgentInfo) || pAgentInfo == nullptr)
 			return BehaviorState::Failure;
 
-		// Get the interface
+		// Get the houses
 		std::vector<HouseInfoExtended>* pHouseVec;
 		if(!pBlackboard->GetData(BB_HOUSES_PTR, pHouseVec) || pHouseVec == nullptr)
 			return BehaviorState::Failure;
 
 		float closestDistance{ FLT_MAX };
-		HouseInfoExtended closestHouse{};
-		for(const HouseInfoExtended& house : *pHouseVec)
+		HouseInfoExtended closestHouse;
+		for(HouseInfoExtended& house : *pHouseVec)
 		{
 			const float distance{ house.Center.Distance(pAgentInfo->Position) };
 			if(house.Looted == false && distance < closestDistance)
 			{
-				closestHouse = house;
+				if(distance < 5.0f)
+				{
+					house.Looted = true;
+				}
+				else
+				{
+					closestHouse = house;
+					closestDistance = distance;
+				}
+			}
+		}
+
+		if(closestDistance == FLT_MAX)
+		{
+			// No lootable houses found
+			return BehaviorState::Failure;
+		}
+
+
+		// Set target in the blackboard
+		if(!pBlackboard->ChangeData(BB_STEERING_TARGET, closestHouse.Center))
+			return BehaviorState::Failure;
+		return BehaviorState::Success;
+	}
+
+	BehaviorState GrabClosestPistol(Blackboard* pBlackboard)
+	{
+		// Get the agent
+		AgentInfo* pAgentInfo;
+		if(!pBlackboard->GetData(BB_AGENT_INFO_PTR, pAgentInfo) || pAgentInfo == nullptr)
+			return BehaviorState::Failure;
+
+		// Get the items
+		std::vector<ItemInfo>* pItemVec;
+		if(!pBlackboard->GetData(BB_ITEMS_PTR, pItemVec) || pItemVec == nullptr)
+			return BehaviorState::Failure;
+
+
+		float closestDistance{ FLT_MAX };
+		ItemInfo closestItem;
+		for(ItemInfo& item : *pItemVec)
+		{
+			const float distance{ item.Location.Distance(pAgentInfo->Position) };
+			if(item.Type == eItemType::PISTOL && distance < closestDistance)
+			{
+				closestItem = item;
 				closestDistance = distance;
 			}
 		}
@@ -130,9 +175,196 @@ namespace BT_Actions
 			return BehaviorState::Failure;
 		}
 
+		if(closestDistance < 3.0f)
+		{
+			// Pick up item
+			// Get the interface
+			IExamInterface* pInterface;
+			if(!pBlackboard->GetData(BB_EXAM_INTERFACE_PTR, pInterface) || pInterface == nullptr)
+				return BehaviorState::Failure;
+
+			EntityInfo itemToGrab{};
+			itemToGrab.EntityHash = closestItem.ItemHash;
+			ItemInfo grabbedItem{};
+			if(!pInterface->Item_Grab(itemToGrab, grabbedItem))
+				return BehaviorState::Failure;
+			if(!pInterface->Inventory_AddItem(BB_PISTOL_INV_SLOT, grabbedItem))
+				return BehaviorState::Failure;
+			return BehaviorState::Success;
+		}
+
 		// Set target in the blackboard
-		if(!pBlackboard->ChangeData(BB_STEERING_TARGET, closestHouse.Center))
+		if(!pBlackboard->ChangeData(BB_STEERING_TARGET, closestItem.Location))
 			return BehaviorState::Failure;
+
+		return BehaviorState::Success;
+	}
+
+	BehaviorState GrabClosestShotgun(Blackboard* pBlackboard)
+	{
+		// Get the agent
+		AgentInfo* pAgentInfo;
+		if(!pBlackboard->GetData(BB_AGENT_INFO_PTR, pAgentInfo) || pAgentInfo == nullptr)
+			return BehaviorState::Failure;
+
+		// Get the items
+		std::vector<ItemInfo>* pItemVec;
+		if(!pBlackboard->GetData(BB_ITEMS_PTR, pItemVec) || pItemVec == nullptr)
+			return BehaviorState::Failure;
+
+
+		float closestDistance{ FLT_MAX };
+		ItemInfo closestItem;
+		for(ItemInfo& item : *pItemVec)
+		{
+			const float distance{ item.Location.Distance(pAgentInfo->Position) };
+			if(item.Type == eItemType::SHOTGUN && distance < closestDistance)
+			{
+				closestItem = item;
+				closestDistance = distance;
+			}
+		}
+
+		if(closestDistance == FLT_MAX)
+		{
+			// No lootable houses found
+			return BehaviorState::Failure;
+		}
+
+		if(closestDistance < 3.0f)
+		{
+			// Pick up item
+			// Get the interface
+			IExamInterface* pInterface;
+			if(!pBlackboard->GetData(BB_EXAM_INTERFACE_PTR, pInterface) || pInterface == nullptr)
+				return BehaviorState::Failure;
+
+			EntityInfo itemToGrab{};
+			itemToGrab.EntityHash = closestItem.ItemHash;
+			ItemInfo grabbedItem{};
+			if(!pInterface->Item_Grab(itemToGrab, grabbedItem))
+				return BehaviorState::Failure;
+			if(!pInterface->Inventory_AddItem(BB_SHOTGUN_INV_SLOT, grabbedItem))
+				return BehaviorState::Failure;
+			return BehaviorState::Success;
+		}
+
+		// Set target in the blackboard
+		if(!pBlackboard->ChangeData(BB_STEERING_TARGET, closestItem.Location))
+			return BehaviorState::Failure;
+
+		return BehaviorState::Success;
+	}
+
+	BehaviorState GrabClosestFood(Blackboard* pBlackboard)
+	{
+		// Get the agent
+		AgentInfo* pAgentInfo;
+		if(!pBlackboard->GetData(BB_AGENT_INFO_PTR, pAgentInfo) || pAgentInfo == nullptr)
+			return BehaviorState::Failure;
+
+		// Get the items
+		std::vector<ItemInfo>* pItemVec;
+		if(!pBlackboard->GetData(BB_ITEMS_PTR, pItemVec) || pItemVec == nullptr)
+			return BehaviorState::Failure;
+
+
+		float closestDistance{ FLT_MAX };
+		ItemInfo closestItem;
+		for(ItemInfo& item : *pItemVec)
+		{
+			const float distance{ item.Location.Distance(pAgentInfo->Position) };
+			if(item.Type == eItemType::FOOD && distance < closestDistance)
+			{
+				closestItem = item;
+				closestDistance = distance;
+			}
+		}
+
+		if(closestDistance == FLT_MAX)
+		{
+			// No lootable houses found
+			return BehaviorState::Failure;
+		}
+
+		if(closestDistance < 3.0f)
+		{
+			// Pick up item
+			// Get the interface
+			IExamInterface* pInterface;
+			if(!pBlackboard->GetData(BB_EXAM_INTERFACE_PTR, pInterface) || pInterface == nullptr)
+				return BehaviorState::Failure;
+
+			EntityInfo itemToGrab{};
+			itemToGrab.EntityHash = closestItem.ItemHash;
+			ItemInfo grabbedItem{};
+			if(!pInterface->Item_Grab(itemToGrab, grabbedItem))
+				return BehaviorState::Failure;
+			if(!pInterface->Inventory_AddItem(BB_FOOD_INV_SLOT, grabbedItem))
+				return BehaviorState::Failure;
+			return BehaviorState::Success;
+		}
+
+		// Set target in the blackboard
+		if(!pBlackboard->ChangeData(BB_STEERING_TARGET, closestItem.Location))
+			return BehaviorState::Failure;
+
+		return BehaviorState::Success;
+	}
+
+	BehaviorState GrabClosestMedkit(Blackboard* pBlackboard)
+	{
+		// Get the agent
+		AgentInfo* pAgentInfo;
+		if(!pBlackboard->GetData(BB_AGENT_INFO_PTR, pAgentInfo) || pAgentInfo == nullptr)
+			return BehaviorState::Failure;
+
+		// Get the items
+		std::vector<ItemInfo>* pItemVec;
+		if(!pBlackboard->GetData(BB_ITEMS_PTR, pItemVec) || pItemVec == nullptr)
+			return BehaviorState::Failure;
+
+
+		float closestDistance{ FLT_MAX };
+		ItemInfo closestItem;
+		for(ItemInfo& item : *pItemVec)
+		{
+			const float distance{ item.Location.Distance(pAgentInfo->Position) };
+			if(item.Type == eItemType::MEDKIT && distance < closestDistance)
+			{
+				closestItem = item;
+				closestDistance = distance;
+			}
+		}
+
+		if(closestDistance == FLT_MAX)
+		{
+			// No lootable houses found
+			return BehaviorState::Failure;
+		}
+
+		if(closestDistance < 3.0f)
+		{
+			// Pick up item
+			// Get the interface
+			IExamInterface* pInterface;
+			if(!pBlackboard->GetData(BB_EXAM_INTERFACE_PTR, pInterface) || pInterface == nullptr)
+				return BehaviorState::Failure;
+
+			EntityInfo itemToGrab{};
+			itemToGrab.EntityHash = closestItem.ItemHash;
+			ItemInfo grabbedItem{};
+			if(!pInterface->Item_Grab(itemToGrab, grabbedItem))
+				return BehaviorState::Failure;
+			if(!pInterface->Inventory_AddItem(BB_MEDKIT_INV_SLOT, grabbedItem))
+				return BehaviorState::Failure;
+			return BehaviorState::Success;
+		}
+
+		// Set target in the blackboard
+		if(!pBlackboard->ChangeData(BB_STEERING_TARGET, closestItem.Location))
+			return BehaviorState::Failure;
+
 		return BehaviorState::Success;
 	}
 
@@ -413,7 +645,7 @@ namespace BT_Conditions
 		if(!pBlackboard->GetData(BB_AGENT_INFO_PTR, pAgentInfo) || pAgentInfo == nullptr)
 			return false;
 
-		// Get the interface
+		// Get the enemies
 		std::vector<EnemyInfoExtended>* pEnemiesVec;
 		if(!pBlackboard->GetData(BB_ENEMIES_PTR, pEnemiesVec) || pEnemiesVec == nullptr)
 			return false;
@@ -438,7 +670,7 @@ namespace BT_Conditions
 		if(!pBlackboard->GetData(BB_AGENT_INFO_PTR, pAgentInfo) || pAgentInfo == nullptr)
 			return false;
 
-		// Get the interface
+		// Get the items
 		std::vector<ItemInfo>* pItemsVec;
 		if(!pBlackboard->GetData(BB_ITEMS_PTR, pItemsVec) || pItemsVec == nullptr)
 			return false;
@@ -460,7 +692,7 @@ namespace BT_Conditions
 		if(!pBlackboard->GetData(BB_AGENT_INFO_PTR, pAgentInfo) || pAgentInfo == nullptr)
 			return false;
 
-		// Get the interface
+		// Get the items
 		std::vector<ItemInfo>* pItemsVec;
 		if(!pBlackboard->GetData(BB_ITEMS_PTR, pItemsVec) || pItemsVec == nullptr)
 			return false;
@@ -482,7 +714,7 @@ namespace BT_Conditions
 		if(!pBlackboard->GetData(BB_AGENT_INFO_PTR, pAgentInfo) || pAgentInfo == nullptr)
 			return false;
 
-		// Get the interface
+		// Get the items
 		std::vector<ItemInfo>* pItemsVec;
 		if(!pBlackboard->GetData(BB_ITEMS_PTR, pItemsVec) || pItemsVec == nullptr)
 			return false;
@@ -504,7 +736,7 @@ namespace BT_Conditions
 		if(!pBlackboard->GetData(BB_AGENT_INFO_PTR, pAgentInfo) || pAgentInfo == nullptr)
 			return false;
 
-		// Get the interface
+		// Get the items
 		std::vector<ItemInfo>* pItemsVec;
 		if(!pBlackboard->GetData(BB_ITEMS_PTR, pItemsVec) || pItemsVec == nullptr)
 			return false;
@@ -526,7 +758,7 @@ namespace BT_Conditions
 		if(!pBlackboard->GetData(BB_AGENT_INFO_PTR, pAgentInfo) || pAgentInfo == nullptr)
 			return false;
 
-		// Get the interface
+		// Get the houses
 		std::vector<HouseInfoExtended>* pHouseVec;
 		if(!pBlackboard->GetData(BB_HOUSES_PTR, pHouseVec) || pHouseVec == nullptr)
 			return false;
