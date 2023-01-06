@@ -18,7 +18,8 @@ struct HouseInfoExtended: public HouseInfo
 	{
 	}
 
-	float LastVisitTime = 0.0f;
+	float LastVisitTime = -1.0f;
+	float EnteredTime = -1.0f;
 	bool Looted = false;
 };
 

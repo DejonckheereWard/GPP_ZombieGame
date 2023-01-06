@@ -139,6 +139,11 @@ namespace BT_Actions
 		if(!pBlackboard->GetData(BB_HOUSES_PTR, pHouseVec) || pHouseVec == nullptr)
 			return BehaviorState::Failure;
 
+		// Get the current time
+		float currentTime{};
+		if(!pBlackboard->GetData(BB_CURRENT_TIME, currentTime))
+			return BehaviorState::Failure;
+
 		float closestDistance{ FLT_MAX };
 		HouseInfoExtended closestHouse;
 		for(HouseInfoExtended& house : *pHouseVec)
@@ -148,7 +153,21 @@ namespace BT_Actions
 			{
 				if(distance < 5.0f)
 				{
-					house.Looted = true;
+					if(house.EnteredTime <= 0.0f)
+					{
+						house.EnteredTime = currentTime;
+					}
+					else if((currentTime - house.EnteredTime) > 5.0f)
+					{
+						house.EnteredTime = -1.0f;
+						house.LastVisitTime = currentTime;
+						house.Looted = true;
+					}
+					else
+					{
+						closestHouse = house;
+						closestDistance = distance;
+					}
 				}
 				else
 				{

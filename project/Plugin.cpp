@@ -162,10 +162,10 @@ SteeringPlugin_Output Plugin::UpdateSteering(float dt)
 
 	Elite::Vector2 behaviorTarget{};
 	m_pBlackboard->GetData(BB_STEERING_TARGET, behaviorTarget);
-	auto steering = SteeringPlugin_Output();
+	SteeringPlugin_Output steering = SteeringPlugin_Output();
 
 	//Use the Interface (IAssignmentInterface) to 'interface' with the AI_Framework
-	auto agentInfo = m_pInterface->Agent_GetInfo();
+	AgentInfo agentInfo = m_pInterface->Agent_GetInfo();
 
 
 
@@ -173,8 +173,8 @@ SteeringPlugin_Output Plugin::UpdateSteering(float dt)
 	//auto nextTargetPos = m_pInterface->NavMesh_GetClosestPathPoint(checkpointLocation);
 
 	//OR, Use the mouse target
-	auto nextTargetPos = m_pInterface->NavMesh_GetClosestPathPoint(behaviorTarget); //Uncomment this to use mouse position as guidance
-
+	Elite::Vector2 nextTargetPos = m_pInterface->NavMesh_GetClosestPathPoint(behaviorTarget); //Uncomment this to use mouse position as guidance
+	m_NavMeshTarget = nextTargetPos;
 
 	//Simple Seek Behaviour (towards Target)
 	steering.LinearVelocity = nextTargetPos - agentInfo.Position; //Desired Velocity
@@ -211,6 +211,9 @@ void Plugin::Render(float dt) const
 		const Checkpoint& next = m_Checkpoints[(i + 1) % m_Checkpoints.size()];
 		m_pInterface->Draw_Segment(current.Location, next.Location, {});
 	}
+
+	// Draw line to steering target
+	m_pInterface->Draw_Segment(m_pInterface->Agent_GetInfo().Position, m_SteeringTarget, { 1, 0, 0 });
 }
 
 std::vector<HouseInfo> Plugin::GetHousesInFOV() const
@@ -423,7 +426,9 @@ BehaviorTree* Plugin::CreateBehaviortree(Blackboard* pBlackboard) const
 			// If we dont, we need to roam the map, also notice how the map has a limited radius of where the houses spawn, so stay in there
 			new BehaviorSequence({
 				new BehaviorConditional(BT_Conditions::LootableHouseNearby),
-				new BehaviorAction(BT_Actions::GoToClosestLootableHouse)
+				new BehaviorAction(BT_Actions::GoToClosestLootableHouse),
+				new BehaviorAction(BT_Actions::ScanArea), // Still want to rotate when going towards a lootable house
+
 			}),
 			new BehaviorSequence({
 				new BehaviorSelector({

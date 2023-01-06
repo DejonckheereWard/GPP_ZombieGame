@@ -56,6 +56,7 @@ private:
 
 	// OUTPUT VARS (Changed by the behaviortree for the plugin to act on)
 	Elite::Vector2 m_SteeringTarget{};
+	Elite::Vector2 m_NavMeshTarget{}; // for render / debug purposes
 	float m_AngularVelocity{};  // -1, 0, 1 (direction in which agent wants to rotate)
 	bool m_CanRun = false;
 	bool m_AimToTarget = false;
