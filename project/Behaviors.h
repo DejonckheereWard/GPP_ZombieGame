@@ -24,6 +24,7 @@
 #define BB_STEERING_TARGET "targetPos"
 #define BB_ANGULAR_VELOCITY "angularVelocity"
 #define BB_CAN_RUN "canRun"
+#define BB_AIM_TO_TARGET "aimToTarget"
 
 // INVENTORY SLOTS
 #define BB_SHOTGUN_INV_SLOT 0
@@ -174,6 +175,8 @@ namespace BT_Actions
 	{
 		PrintColorAction("GOING TO NEXT CHECKPOINT");
 
+		const float checkpointRadius{ 20.0f };
+
 		// Get the agent
 		AgentInfo* pAgentInfo;
 		if(!pBlackboard->GetData(BB_AGENT_INFO_PTR, pAgentInfo) || pAgentInfo == nullptr)
@@ -189,7 +192,8 @@ namespace BT_Actions
 		{
 			if(checkpoint.IsVisited == false)
 			{
-				if(checkpoint.Location.Distance(pAgentInfo->Position) > 10.0f)
+				const float distance{ Distance(checkpoint.Location, pAgentInfo->Position) };
+				if(distance > checkpointRadius)
 				{
 					if(!pBlackboard->ChangeData(BB_STEERING_TARGET, checkpoint.Location))
 						return BehaviorState::Failure;
@@ -249,15 +253,14 @@ namespace BT_Actions
 			EntityInfo itemToGrab{};
 			itemToGrab.EntityHash = closestItem.ItemHash;
 			ItemInfo grabbedItem{};
-			if(!pInterface->Item_Grab(itemToGrab, grabbedItem))
-				return BehaviorState::Failure;
-			if(!pInterface->Inventory_AddItem(BB_PISTOL_INV_SLOT, grabbedItem))
-				return BehaviorState::Failure;
-
-			// Remove item from the list
-			pItemVec->erase(std::remove_if(pItemVec->begin(), pItemVec->end(), [closestItem](const ItemInfo& item) { return item.ItemHash == closestItem.ItemHash; }), pItemVec->end());
-
-			return BehaviorState::Success;
+			if(pInterface->Item_Grab(itemToGrab, grabbedItem))
+			{
+				if(pInterface->Inventory_AddItem(BB_PISTOL_INV_SLOT, grabbedItem))
+				{
+					pItemVec->erase(std::remove_if(pItemVec->begin(), pItemVec->end(), [closestItem](const ItemInfo& item) { return item.ItemHash == closestItem.ItemHash; }), pItemVec->end());
+					return BehaviorState::Success;
+				}
+			}
 		}
 
 		// Set target in the blackboard
@@ -310,16 +313,15 @@ namespace BT_Actions
 			EntityInfo itemToGrab{};
 			itemToGrab.EntityHash = closestItem.ItemHash;
 			ItemInfo grabbedItem{};
-			if(!pInterface->Item_Grab(itemToGrab, grabbedItem))
-				return BehaviorState::Failure;
-			if(!pInterface->Inventory_AddItem(BB_SHOTGUN_INV_SLOT, grabbedItem))
-				return BehaviorState::Failure;
-
-			// Remove item from the list
-			pItemVec->erase(std::remove_if(pItemVec->begin(), pItemVec->end(), [closestItem](const ItemInfo& item) { return item.ItemHash == closestItem.ItemHash; }), pItemVec->end());
-
-
-			return BehaviorState::Success;
+			if(pInterface->Item_Grab(itemToGrab, grabbedItem))
+			{
+				if(pInterface->Inventory_AddItem(BB_SHOTGUN_INV_SLOT, grabbedItem))
+				{
+					// Remove item from the list
+					pItemVec->erase(std::remove_if(pItemVec->begin(), pItemVec->end(), [closestItem](const ItemInfo& item) { return item.ItemHash == closestItem.ItemHash; }), pItemVec->end());
+					return BehaviorState::Success;
+				}
+			}
 		}
 
 		// Set target in the blackboard
@@ -372,16 +374,15 @@ namespace BT_Actions
 			EntityInfo itemToGrab{};
 			itemToGrab.EntityHash = closestItem.ItemHash;
 			ItemInfo grabbedItem{};
-			if(!pInterface->Item_Grab(itemToGrab, grabbedItem))
-				return BehaviorState::Failure;
-			if(!pInterface->Inventory_AddItem(BB_FOOD_INV_SLOT, grabbedItem))
-				return BehaviorState::Failure;
-
-			// Remove item from the list
-			pItemVec->erase(std::remove_if(pItemVec->begin(), pItemVec->end(), [closestItem](const ItemInfo& item) { return item.ItemHash == closestItem.ItemHash; }), pItemVec->end());
-
-
-			return BehaviorState::Success;
+			if(pInterface->Item_Grab(itemToGrab, grabbedItem))
+			{
+				if(pInterface->Inventory_AddItem(BB_FOOD_INV_SLOT, grabbedItem))
+				{
+					// Remove item from the list
+					pItemVec->erase(std::remove_if(pItemVec->begin(), pItemVec->end(), [closestItem](const ItemInfo& item) { return item.ItemHash == closestItem.ItemHash; }), pItemVec->end());
+					return BehaviorState::Success;
+				}
+			}
 		}
 
 		// Set target in the blackboard
@@ -434,9 +435,69 @@ namespace BT_Actions
 			EntityInfo itemToGrab{};
 			itemToGrab.EntityHash = closestItem.ItemHash;
 			ItemInfo grabbedItem{};
-			if(!pInterface->Item_Grab(itemToGrab, grabbedItem))
+			if(pInterface->Item_Grab(itemToGrab, grabbedItem))
+			{
+				if(pInterface->Inventory_AddItem(BB_MEDKIT_INV_SLOT, grabbedItem))
+				{
+					// Remove item from the list
+					pItemVec->erase(std::remove_if(pItemVec->begin(), pItemVec->end(), [closestItem](const ItemInfo& item) { return item.ItemHash == closestItem.ItemHash; }), pItemVec->end());
+					return BehaviorState::Success;
+				}
+			}
+		}
+
+		// Set target in the blackboard
+		if(!pBlackboard->ChangeData(BB_STEERING_TARGET, closestItem.Location))
+			return BehaviorState::Failure;
+
+		return BehaviorState::Success;
+	}
+
+	BehaviorState DestroyClosestGarbage(Blackboard* pBlackboard)
+	{
+		PrintColorAction("ATTEMPTING TO DESTROY CLOSEST GARBAGE");
+
+		// Get the agent
+		AgentInfo* pAgentInfo;
+		if(!pBlackboard->GetData(BB_AGENT_INFO_PTR, pAgentInfo) || pAgentInfo == nullptr)
+			return BehaviorState::Failure;
+
+		// Get the items
+		std::vector<ItemInfo>* pItemVec;
+		if(!pBlackboard->GetData(BB_ITEMS_PTR, pItemVec) || pItemVec == nullptr)
+			return BehaviorState::Failure;
+
+
+		float closestDistance{ FLT_MAX };
+		ItemInfo closestItem;
+		for(ItemInfo& item : *pItemVec)
+		{
+			const float distance{ item.Location.Distance(pAgentInfo->Position) };
+			if(item.Type == eItemType::GARBAGE && distance < closestDistance)
+			{
+				closestItem = item;
+				closestDistance = distance;
+			}
+		}
+
+		if(closestDistance == FLT_MAX)
+		{
+			// NO GARBAGE FOUND
+			return BehaviorState::Failure;
+		}
+
+		if(closestDistance < 3.0f)
+		{
+			// Pick up item
+			// Get the interface
+			IExamInterface* pInterface;
+			if(!pBlackboard->GetData(BB_EXAM_INTERFACE_PTR, pInterface) || pInterface == nullptr)
 				return BehaviorState::Failure;
-			if(!pInterface->Inventory_AddItem(BB_MEDKIT_INV_SLOT, grabbedItem))
+
+			EntityInfo itemToDestroy{};
+			itemToDestroy.EntityHash = closestItem.ItemHash;
+			ItemInfo grabbedItem{};
+			if(!pInterface->Item_Destroy(itemToDestroy))
 				return BehaviorState::Failure;
 
 			// Remove item from the list
@@ -451,6 +512,40 @@ namespace BT_Actions
 			return BehaviorState::Failure;
 
 		return BehaviorState::Success;
+
+
+	}
+
+	BehaviorState AimTowardsSteeringTarget(Blackboard* pBlackboard)
+	{
+		PrintColorAction("ATTEMPTING TO AIM AT STEERING TARGET");
+
+
+		if(!pBlackboard->ChangeData(BB_AIM_TO_TARGET, true))
+			return BehaviorState::Failure;
+
+		return BehaviorState::Success;
+		//// Try to aim towards the item
+		//// Change the angular rotation based on where the enemy is
+		//const Elite::Vector2 vectorToTarget{ closestItem.Location - pAgentInfo->Position };
+		//const float vectorToAngle{ atan2f(vectorToTarget.y, vectorToTarget.x) };
+
+		//if(vectorToAngle > pAgentInfo->Orientation)
+		//{
+		//	if(!pBlackboard->ChangeData(BB_ANGULAR_VELOCITY, 1.0f))
+		//		return BehaviorState::Failure;
+
+		//	return BehaviorState::Success;
+		//}
+		//else
+		//{
+		//	if(!pBlackboard->ChangeData(BB_ANGULAR_VELOCITY, -1.0f))
+		//		return BehaviorState::Failure;
+
+		//	return BehaviorState::Success;
+		//}
+
+		//return BehaviorState::Success;
 	}
 
 	BehaviorState UseMedkit(Blackboard* pBlackboard)
@@ -711,6 +806,20 @@ namespace BT_Conditions
 		return true;
 	}
 
+	bool HasNoMedkit(Blackboard* pBlackboard)
+	{
+		PrintColorCondition("CHECKING IF HAS NO MEDKIT");
+		// Get the interface
+		IExamInterface* pInterface;
+		if(!pBlackboard->GetData(BB_EXAM_INTERFACE_PTR, pInterface) || pInterface == nullptr)
+			return false;
+
+		ItemInfo itemInfo;
+		if(!pInterface->Inventory_GetItem(BB_MEDKIT_INV_SLOT, itemInfo))
+			return true;
+		return false;
+	}
+
 	bool HasShotgun(Blackboard* pBlackboard)
 	{
 		PrintColorCondition("CHECKING IF HAS SHOTGUN");
@@ -858,6 +967,20 @@ namespace BT_Conditions
 		return true;
 	}
 
+	bool HasNoFood(Blackboard* pBlackboard)
+	{
+		PrintColorCondition("CHECKING IF HAS FOOD");
+		// Get the interface
+		IExamInterface* pInterface;
+		if(!pBlackboard->GetData(BB_EXAM_INTERFACE_PTR, pInterface) || pInterface == nullptr)
+			return false;
+
+		ItemInfo itemInfo;
+		if(!pInterface->Inventory_GetItem(BB_FOOD_INV_SLOT, itemInfo))
+			return true;
+		return false;
+	}
+
 
 	bool EnemyNearby(Blackboard* pBlackboard)
 	{
@@ -995,6 +1118,29 @@ namespace BT_Conditions
 		for(const HouseInfoExtended& house : *pHouseVec)
 		{
 			if(house.Looted == false && house.Center.Distance(pAgentInfo->Position) < nearbyRadius)
+				return true;
+		}
+		return false;
+	}
+
+	bool GarbageNearby(Blackboard* pBlackboard)
+	{
+		PrintColorCondition("CHECKING IF GARBAGE NEARBY");
+		const float nearbyRadius{ 20.0f };  // Radius which is considered to be NEARBY
+
+		// Get the agent
+		AgentInfo* pAgentInfo;
+		if(!pBlackboard->GetData(BB_AGENT_INFO_PTR, pAgentInfo) || pAgentInfo == nullptr)
+			return false;
+
+		// Get the items
+		std::vector<ItemInfo>* pItemsVec;
+		if(!pBlackboard->GetData(BB_ITEMS_PTR, pItemsVec) || pItemsVec == nullptr)
+			return false;
+
+		for(const ItemInfo& item : *pItemsVec)
+		{
+			if(item.Type == eItemType::GARBAGE && item.Location.Distance(pAgentInfo->Position) < nearbyRadius)
 				return true;
 		}
 		return false;

@@ -56,12 +56,13 @@ void Plugin::InitGameDebugParams(GameDebugParams& params)
 	params.EnemyCount = 20; //How many enemies? (Default = 20)
 	params.GodMode = false; //GodMode > You can't die, can be useful to inspect certain behaviors (Default = false)
 	params.LevelFile = "GameLevel.gppl";
-	params.AutoGrabClosestItem = true; //A call to Item_Grab(...) returns the closest item that can be grabbed. (EntityInfo argument is ignored)
+	params.AutoGrabClosestItem = false; //A call to Item_Grab(...) returns the closest item that can be grabbed. (EntityInfo argument is ignored)
 	params.StartingDifficultyStage = 1;
 	params.InfiniteStamina = false;
-	params.SpawnDebugPistol = true;
-	params.SpawnDebugShotgun = true;
+	params.SpawnDebugPistol = false;
+	params.SpawnDebugShotgun = false;
 	params.SpawnPurgeZonesOnMiddleClick = true;
+	params.SpawnZombieOnRightClick = true;
 	params.PrintDebugMessages = true;
 	params.ShowDebugItemNames = true;
 	params.Seed = 63;
@@ -151,6 +152,7 @@ SteeringPlugin_Output Plugin::UpdateSteering(float dt)
 	CheckForNewEntities();
 	UpdateEntities();  // Updates and cleans up the storage of entities where needed
 	m_pBlackboard->ChangeData(BB_AGENT_INFO_PTR, &m_pInterface->Agent_GetInfo());
+	m_pBlackboard->ChangeData(BB_CURRENT_TIME, m_CurrentTime);
 	m_pBehaviorTree->Update(dt);
 
 	UpdateOutputVariables(m_pBlackboard);  // Copies output variables into the member variables as needed
@@ -188,7 +190,7 @@ SteeringPlugin_Output Plugin::UpdateSteering(float dt)
 	}
 
 	//steering.AngularVelocity = m_AngSpeed; //Rotate your character to inspect the world while walking
-	steering.AutoOrient = false; //Setting AutoOrient to TRue overrides the AngularVelocity
+	steering.AutoOrient = m_AimToTarget; //Setting AutoOrient to TRue overrides the AngularVelocity
 	steering.RunMode = m_CanRun; //If RunMode is True > MaxLinSpd is increased for a limited time (till your stamina runs out)
 
 
@@ -271,6 +273,7 @@ Blackboard* Plugin::CreateBlackboard()
 	// OUTPUT DATA
 	pBlackboard->AddData(BB_STEERING_TARGET, m_SteeringTarget);
 	pBlackboard->AddData(BB_CAN_RUN, m_CanRun);
+	pBlackboard->AddData(BB_AIM_TO_TARGET, m_AimToTarget);
 	pBlackboard->AddData(BB_ANGULAR_VELOCITY, m_AngularVelocity);
 	//pBlackboard->AddData(BB_LOOK_DIRECTION, Elite::Vector2());
 
@@ -338,11 +341,13 @@ BehaviorTree* Plugin::CreateBehaviortree(Blackboard* pBlackboard) const
 							new BehaviorSequence({
 								// Check if we already have a weapon, or if we are low on ammo
 								new BehaviorConditional(BT_Conditions::HasNoPistol),
+								new BehaviorAction(BT_Actions::AimTowardsSteeringTarget),
 								new BehaviorAction(BT_Actions::GrabClosestPistol)
 							}),
 							new BehaviorSequence({
 								new BehaviorConditional(BT_Conditions::HasPistol),
 								new BehaviorConditional(BT_Conditions::LowPistolAmmo),
+								new BehaviorAction(BT_Actions::AimTowardsSteeringTarget),
 								new BehaviorAction(BT_Actions::GrabClosestPistol)  // GOTO + GRAB IF IN RANGE
 							})
 						}),
@@ -356,12 +361,32 @@ BehaviorTree* Plugin::CreateBehaviortree(Blackboard* pBlackboard) const
 							new BehaviorSequence({
 								// Check if we already have a weapon, or if we are low on ammo
 								new BehaviorConditional(BT_Conditions::HasNoShotgun),
+								new BehaviorAction(BT_Actions::AimTowardsSteeringTarget),
 								new BehaviorAction(BT_Actions::GrabClosestShotgun)
 							}),
 							new BehaviorSequence({
 								new BehaviorConditional(BT_Conditions::HasShotgun),
 								new BehaviorConditional(BT_Conditions::LowShotgunAmmo),
+								new BehaviorAction(BT_Actions::AimTowardsSteeringTarget),
 								new BehaviorAction(BT_Actions::GrabClosestShotgun)  // GOTO + GRAB IF IN RANGE
+							})
+						}),
+					}),
+
+					// Medkits
+					new BehaviorSequence({
+						new BehaviorConditional(BT_Conditions::MedkitNearby),
+						new BehaviorSelector({
+							new BehaviorSequence({
+								new BehaviorConditional(BT_Conditions::HasNoMedkit),
+								new BehaviorAction(BT_Actions::AimTowardsSteeringTarget),
+								new BehaviorAction(BT_Actions::GrabClosestMedkit),
+							}),
+							new BehaviorSequence({
+								new BehaviorConditional(BT_Conditions::SlightlyDamaged),
+								new BehaviorAction(BT_Actions::UseMedkit),
+								new BehaviorAction(BT_Actions::AimTowardsSteeringTarget),
+								new BehaviorAction(BT_Actions::GrabClosestMedkit)
 							})
 						}),
 					}),
@@ -370,32 +395,25 @@ BehaviorTree* Plugin::CreateBehaviortree(Blackboard* pBlackboard) const
 					new BehaviorSequence({
 						new BehaviorConditional(BT_Conditions::FoodNearby),
 						new BehaviorSelector({
-							new BehaviorSelector({
-								new BehaviorConditional(BT_Conditions::HasFood),  // By using selector, grabclosestfood will only exec if hasfood is false
+							new BehaviorSequence({
+								new BehaviorConditional(BT_Conditions::HasNoFood),  // By using selector, grabclosestfood will only exec if hasfood is false
+								new BehaviorAction(BT_Actions::AimTowardsSteeringTarget),
 								new BehaviorAction(BT_Actions::GrabClosestFood)
 							}),
 							new BehaviorSequence({
 								new BehaviorConditional(BT_Conditions::SlightlyUsedEnergy),  // True if player lost a little of energy, but its not low
 								new BehaviorAction(BT_Actions::UseFood),
+								new BehaviorAction(BT_Actions::AimTowardsSteeringTarget),
 								new BehaviorAction(BT_Actions::GrabClosestFood)
 							})
 						})
 					}),
 
-					// Medkits
+					// Garbage
 					new BehaviorSequence({
-						new BehaviorConditional(BT_Conditions::MedkitNearby),
-						new BehaviorSelector({
-							new BehaviorSelector({
-								new BehaviorConditional(BT_Conditions::HasMedkit),
-								new BehaviorAction(BT_Actions::GrabClosestMedkit),
-							}),
-							new BehaviorSequence({
-								new BehaviorConditional(BT_Conditions::SlightlyDamaged),
-								new BehaviorAction(BT_Actions::UseMedkit),
-								new BehaviorAction(BT_Actions::GrabClosestMedkit)
-							})
-						}),
+						new BehaviorConditional(BT_Conditions::GarbageNearby),
+						new BehaviorAction(BT_Actions::AimTowardsSteeringTarget),
+						new BehaviorAction(BT_Actions::DestroyClosestGarbage),
 					})
 				})
 			}),
@@ -505,6 +523,7 @@ void Plugin::CheckForNewHouses()
 void Plugin::CheckForNewEntities()
 {
 	// Get all entities in the fov
+	m_Enemies.clear();
 
 	std::vector<EntityInfo> entitiesInFov = GetEntitiesInFOV();
 
@@ -611,14 +630,20 @@ void Plugin::UpdateEntities()
 	// Old enemies will have to be removed from the vector when their last seen time is too long ago
 	// Delete enemies that are too old
 	// Loop in reverse to prevent skipping when a delete happens
-	const float maxTimeSinceLastSeenEnemy = 2.f;
-	for(int i = m_Enemies.size() - 1; i >= 0; --i)
-	{
-		if(m_CurrentTime - m_Enemies[i].LastSeenTime > maxTimeSinceLastSeenEnemy)
-		{
-			m_Enemies.erase(m_Enemies.begin() + i);
-		}
-	}
+	//const float maxTimeSinceLastSeenEnemy = 2.f;
+	//for(int i = m_Enemies.size() - 1; i >= 0; --i)
+	//{
+	//	if(m_CurrentTime - m_Enemies[i].LastSeenTime > maxTimeSinceLastSeenEnemy)
+	//	{
+	//		m_Enemies.erase(m_Enemies.begin() + i);
+	//	}
+	//	if(m_Enemies[i].Health <= 0)
+	//	{
+	//		m_Enemies.erase(m_Enemies.begin() + i);
+	//	}
+	//}
+
+
 
 }
 
@@ -628,8 +653,8 @@ void Plugin::UpdateOutputVariables(Blackboard* pBlackboard)
 	bool result{ true };
 	result &= pBlackboard->GetData(BB_STEERING_TARGET, m_SteeringTarget);
 	result &= pBlackboard->GetData(BB_CAN_RUN, m_CanRun);
+	result &= pBlackboard->GetData(BB_AIM_TO_TARGET, m_AimToTarget);
 	result &= pBlackboard->GetData(BB_ANGULAR_VELOCITY, m_AngularVelocity);
-	result &= pBlackboard->GetData(BB_CURRENT_TIME, m_CurrentTime);
 
 	if(!result)
 	{
@@ -643,10 +668,12 @@ void Plugin::ResetOutputVariables(Blackboard* pBlackboard)
 	m_SteeringTarget = m_pInterface->Agent_GetInfo().Position;  // Reset to current position, not 0
 	m_AngularVelocity = 0;
 	m_CanRun = false;
+	m_AimToTarget = false;
 
 
 	bool result{ true };
 	result &= pBlackboard->ChangeData(BB_STEERING_TARGET, m_SteeringTarget);
 	result &= pBlackboard->ChangeData(BB_CAN_RUN, m_CanRun);
+	result &= pBlackboard->ChangeData(BB_AIM_TO_TARGET, m_AimToTarget);
 	result &= pBlackboard->ChangeData(BB_ANGULAR_VELOCITY, m_AngularVelocity);
 }
