@@ -10,6 +10,7 @@
 struct HouseInfoExtended: public HouseInfo
 {
 	// Adds to the existing data from houses
+	HouseInfoExtended() = default;
 
 	// Constructor to update houseinfo to extend edition
 	HouseInfoExtended(const HouseInfo& houseInfo):
@@ -17,14 +18,15 @@ struct HouseInfoExtended: public HouseInfo
 	{
 	}
 
-	float VisitedTime = 0.0f;
-	bool IsVisited = false;
+	float LastVisitTime = 0.0f;
+	bool Looted = false;
 };
 
 
 struct PurgeZoneInfoExtended: public PurgeZoneInfo
 {
 	// Adds to the existing data from purgezones
+	PurgeZoneInfoExtended() = default;
 
 	// Constructor to update purgezoneinfo to extend edition
 	PurgeZoneInfoExtended(const PurgeZoneInfo& purgeZoneInfo):
@@ -38,6 +40,7 @@ struct PurgeZoneInfoExtended: public PurgeZoneInfo
 struct EnemyInfoExtended: public EnemyInfo
 {
 	// Adds to the existing data from enemies
+	EnemyInfoExtended() = default;
 
 	// Constructor to update enemyinfo to extend edition
 	EnemyInfoExtended(const EnemyInfo& enemyInfo):
