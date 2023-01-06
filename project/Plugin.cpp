@@ -335,9 +335,9 @@ BehaviorTree* Plugin::CreateBehaviortree(Blackboard* pBlackboard) const
 						// Check if there is a weapon nearby
 						new BehaviorConditional(BT_Conditions::PistolNearby),
 						new BehaviorSelector({
-							new BehaviorSelector({
+							new BehaviorSequence({
 								// Check if we already have a weapon, or if we are low on ammo
-								new BehaviorConditional(BT_Conditions::HasPistol),
+								new BehaviorConditional(BT_Conditions::HasNoPistol),
 								new BehaviorAction(BT_Actions::GrabClosestPistol)
 							}),
 							new BehaviorSequence({
@@ -353,9 +353,9 @@ BehaviorTree* Plugin::CreateBehaviortree(Blackboard* pBlackboard) const
 						// Check if there is a weapon nearby
 						new BehaviorConditional(BT_Conditions::ShotgunNearby),
 						new BehaviorSelector({
-							new BehaviorSelector({
+							new BehaviorSequence({
 								// Check if we already have a weapon, or if we are low on ammo
-								new BehaviorConditional(BT_Conditions::HasShotgun),
+								new BehaviorConditional(BT_Conditions::HasNoShotgun),
 								new BehaviorAction(BT_Actions::GrabClosestShotgun)
 							}),
 							new BehaviorSequence({

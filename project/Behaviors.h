@@ -572,9 +572,11 @@ namespace BT_Actions
 		EnemyInfoExtended closestEnemy{};
 		for(const EnemyInfoExtended& enemy : *pEnemiesVec)
 		{
-			if(enemy.Location.Distance(pAgentInfo->Position) < closestDistance)
+			float distance{ Distance(enemy.Location, pAgentInfo->Position) };
+			if(distance < closestDistance)
 			{
 				closestEnemy = enemy;
+				closestDistance = distance;
 			}
 		}
 		if(closestDistance == FLT_MAX)
@@ -723,6 +725,20 @@ namespace BT_Conditions
 		return true;
 	}
 
+	bool HasNoShotgun(Blackboard* pBlackboard)
+	{
+		PrintColorCondition("CHECKING IF HAS NO SHOTGUN");
+		// Get the interface
+		IExamInterface* pInterface;
+		if(!pBlackboard->GetData(BB_EXAM_INTERFACE_PTR, pInterface) || pInterface == nullptr)
+			return false;
+
+		ItemInfo itemInfo;
+		if(!pInterface->Inventory_GetItem(BB_SHOTGUN_INV_SLOT, itemInfo))
+			return true;
+		return false;
+	}
+
 	bool HasShotgunAmmo(Blackboard* pBlackboard)
 	{
 		PrintColorCondition("CHECKING IF HAS SHOTGUN AMMO");
@@ -774,6 +790,20 @@ namespace BT_Conditions
 		if(!pInterface->Inventory_GetItem(BB_PISTOL_INV_SLOT, itemInfo))
 			return false;
 		return true;
+	}
+
+	bool HasNoPistol(Blackboard* pBlackboard)
+	{
+		PrintColorCondition("CHECKING IF HAS NO PISTOL");
+		// Get the interface
+		IExamInterface* pInterface;
+		if(!pBlackboard->GetData(BB_EXAM_INTERFACE_PTR, pInterface) || pInterface == nullptr)
+			return false;
+
+		ItemInfo itemInfo;
+		if(!pInterface->Inventory_GetItem(BB_PISTOL_INV_SLOT, itemInfo))
+			return true;
+		return false;
 	}
 
 	bool HasPistolAmmo(Blackboard* pBlackboard)
@@ -989,9 +1019,11 @@ namespace BT_Conditions
 		EnemyInfoExtended closestEnemy{};
 		for(const EnemyInfoExtended& enemy : *pEnemiesVec)
 		{
-			if(enemy.Location.Distance(pAgentInfo->Position) < closestDistance)
+			const float distance{ Distance(enemy.Location, pAgentInfo->Position) };
+			if(distance < closestDistance)
 			{
 				closestEnemy = enemy;
+				closestDistance = distance;
 			}
 		}
 		if(closestDistance == FLT_MAX)
