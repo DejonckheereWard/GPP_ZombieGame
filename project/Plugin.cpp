@@ -280,9 +280,9 @@ BehaviorTree* Plugin::CreateBehaviortree(Blackboard* pBlackboard) const
 
 			// Eating
 			new BehaviorSequence({
-				new BehaviorConditional(BT_Conditions::LowFood),
+				new BehaviorConditional(BT_Conditions::LowEnergy),
 				new BehaviorConditional(BT_Conditions::HasFood),
-				new BehaviorAction(BT_Conditions::UseFood)
+				new BehaviorAction(BT_Actions::UseFood)
 			}),
 
 			// Enemies
@@ -290,11 +290,12 @@ BehaviorTree* Plugin::CreateBehaviortree(Blackboard* pBlackboard) const
 				new BehaviorConditional(BT_Conditions::EnemyNearby),
 				new BehaviorSelector({
 					new BehaviorSequence({
-						new BehaviorConditional(BT_Conditions::WeaponInInventory),
-						new BehaviorConditional(BT_Conditions::HasAmmo),
-						new BehaviorAction(BT_Actions::ShootEnemy)  // LOOK AT + USE WEAPON
+						new BehaviorConditional(BT_Conditions::HasPistol),
+						new BehaviorConditional(BT_Conditions::HasPistolAmmo),
+						//new BehaviorAction(BT_Actions::LookAtClosestEnemy),
+						new BehaviorAction(BT_Actions::UsePistol)  // LOOK AT + USE WEAPON
 					}),
-					new BehaviorAction(BT_Actions::FleeFromEnemies)
+					//new BehaviorAction(BT_Actions::FleeFromEnemies)
 				})
 			}),
 
@@ -305,27 +306,45 @@ BehaviorTree* Plugin::CreateBehaviortree(Blackboard* pBlackboard) const
 					// Weapons (Might need to split up into shotgun and pistol)
 					new BehaviorSequence({
 						// Check if there is a weapon nearby
-						new BehaviorConditional(BT_Conditions::WeaponNearby),
+						new BehaviorConditional(BT_Conditions::PistolNearby),
 						new BehaviorSelector({
 							// Check if we already have a weapon, or if we are low on ammo
-							new BehaviorConditional(BT_Conditions::HasWeaponSpace),
-							new BehaviorConditional(BT_Conditions::LowAmmo),
+							new BehaviorConditional(BT_Conditions::HasPistol),
+							//new BehaviorAction(BT_Actions::GrabClosestPistol)
 						}),
-						new BehaviorAction(BT_Actions::GrabClosestWeapon)
+						new BehaviorSequence({
+							new BehaviorConditional(BT_Conditions::HasPistol),
+							new BehaviorConditional(BT_Conditions::LowPistolAmmo),
+							//new BehaviorAction(BT_Actions::GrabClosestPistol)  // GOTO + GRAB IF IN RANGE
+						})
+					}),
+					new BehaviorSequence({
+						// Check if there is a weapon nearby
+						new BehaviorConditional(BT_Conditions::ShotgunNearby),
+						new BehaviorSelector({
+							// Check if we already have a weapon, or if we are low on ammo
+							new BehaviorConditional(BT_Conditions::HasShotgun),
+							//new BehaviorAction(BT_Actions::GrabClosestShotgun)
+						}),
+						new BehaviorSequence({
+							new BehaviorConditional(BT_Conditions::HasShotgun),
+							new BehaviorConditional(BT_Conditions::LowShotgunAmmo),
+							//new BehaviorAction(BT_Actions::GrabClosestShotgun)  // GOTO + GRAB IF IN RANGE
+						})
 					}),
 
 					// Food
 					new BehaviorSequence({
 						new BehaviorConditional(BT_Conditions::FoodNearby),
 						new BehaviorSelector({
-							new BehaviorSequence({
-								new BehaviorConditional(BT_Conditions::HasFoodSpace),
-								new BehaviorAction(BT_Conditions::GrabClosestFood)
+							new BehaviorSelector({
+								new BehaviorConditional(BT_Conditions::HasFood),  // By using selector, grabclosestfood will only exec if hasfood is false
+								//new BehaviorAction(BT_Conditions::GrabClosestFood)
 							}),
 							new BehaviorSequence({
-								new BehaviorConditional(BT_Conditions::IsSlightlyHungry),  // True if player lost a little of energy, but its not low
-								new BehaviorAction(BT_Conditions::UseFood),
-								new BehaviorAction(BT_Conditions::GrabClosestFood)
+								new BehaviorConditional(BT_Conditions::SlightlyUsedEnergy),  // True if player lost a little of energy, but its not low
+								new BehaviorAction(BT_Actions::UseFood),
+								//new BehaviorAction(BT_Conditions::GrabClosestFood)
 							})
 						})
 					}),
@@ -334,18 +353,16 @@ BehaviorTree* Plugin::CreateBehaviortree(Blackboard* pBlackboard) const
 					new BehaviorSequence({
 						new BehaviorConditional(BT_Conditions::MedkitNearby),
 						new BehaviorSelector({
-							new BehaviorSequence({
-								new BehaviorConditional(BT_Conditions::HasMedkitSpace),
-								new BehaviorAction(BT_Conditions::GrabClosestMedkit),
+							new BehaviorSelector({
+								new BehaviorConditional(BT_Conditions::HasMedkit),
+								//new BehaviorAction(BT_Conditions::GrabClosestMedkit),
 							}),
 							new BehaviorSequence({
-								new BehaviorConditional(BT_Conditions::IsSlightlyDamaged),
+								new BehaviorConditional(BT_Conditions::SlightlyDamaged),
 								new BehaviorAction(BT_Actions::UseMedkit),
-								new BehaviorAction(BT_Actions::GrabClosestMedkit)
+								//new BehaviorAction(BT_Actions::GrabClosestMedkit)
 							})
 						}),
-
-						new BehaviorConditional(BT_Conditions::IsSlightlyDamaged)  // True if player could use medkit but not imediate
 					})
 				})
 			}),
@@ -354,13 +371,13 @@ BehaviorTree* Plugin::CreateBehaviortree(Blackboard* pBlackboard) const
 			// If we know about any unvisited houses, go visit them and search them
 			// If we dont, we need to roam the map, also notice how the map has a limited radius of where the houses spawn, so stay in there
 			new BehaviorSequence({
-				new BehaviorConditional(BT_Conditions::UnvisitedHouseNearby),
-				new BehaviorAction(BT_Conditions::GoToClosestUnvisitedHouse)
+				new BehaviorConditional(BT_Conditions::LootableHouseNearby),
+				new BehaviorAction(BT_Actions::GoToClosestLootableHouse)
 			}),
 
-			new BehaviorSequence({
-				new BehaviorAction(BT_Actions::GoToNextWanderPoint)  // Try to make agent go to places it hasnt gone to yet, could use spatial map
-			}),
+			//new BehaviorSequence({
+			//	new BehaviorAction(BT_Actions::GoToNextWanderPoint)  // Try to make agent go to places it hasnt gone to yet, could use spatial map
+			//}),
 
 			// Shouldnt be reaching this if any of previous worked.
 			new BehaviorSequence({

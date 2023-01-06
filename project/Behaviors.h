@@ -23,6 +23,13 @@
 //#define BB_SCAN_AREA "scanArea"  // True if we want to rotate to scan this frame (for the scan action)  // Auto resets to false after frame
 #define BB_CAN_RUN "canRun"
 
+// INVENTORY SLOTS
+#define BB_SHOTGUN_INV_SLOT 0
+#define BB_PISTOL_INV_SLOT 1
+#define BB_MEDKIT_INV_SLOT 2
+#define BB_FOOD_INV_SLOT 3
+
+#define BB_UNUSED_INV_SLOT 4
 
 namespace BT_Utils
 {
@@ -92,6 +99,98 @@ namespace BT_Actions
 		return BehaviorState::Success;
 	}
 
+	BehaviorState GoToClosestLootableHouse(Blackboard* pBlackboard)
+	{
+
+		// Get the agent
+		AgentInfo* pAgentInfo;
+		if(!pBlackboard->GetData(BB_AGENT_INFO_PTR, pAgentInfo) || pAgentInfo == nullptr)
+			return BehaviorState::Failure;
+
+		// Get the interface
+		std::vector<HouseInfoExtended>* pHouseVec;
+		if(!pBlackboard->GetData(BB_HOUSES_PTR, pHouseVec) || pHouseVec == nullptr)
+			return BehaviorState::Failure;
+
+		float closestDistance{ FLT_MAX };
+		HouseInfoExtended closestHouse{};
+		for(const HouseInfoExtended& house : *pHouseVec)
+		{
+			const float distance{ house.Center.Distance(pAgentInfo->Position) };
+			if(house.Looted == false && distance < closestDistance)
+			{
+				closestHouse = house;
+				closestDistance = distance;
+			}
+		}
+
+		if(closestDistance == FLT_MAX)
+		{
+			// No lootable houses found
+			return BehaviorState::Failure;
+		}
+
+		// Set target in the blackboard
+		if(!pBlackboard->ChangeData(BB_STEERING_TARGET, closestHouse.Center))
+			return BehaviorState::Failure;
+		return BehaviorState::Success;
+	}
+
+	BehaviorState UseMedkit(Blackboard* pBlackboard)
+	{
+		std::cout << "USING MEDKIT\n";
+
+		IExamInterface* pExamInterface;
+		if(!pBlackboard->GetData(BB_EXAM_INTERFACE_PTR, pExamInterface) || pExamInterface == nullptr)
+			return BehaviorState::Failure;
+
+		if(!pExamInterface->Inventory_UseItem(BB_MEDKIT_INV_SLOT))
+			return BehaviorState::Failure;
+
+		return BehaviorState::Success;
+	}
+
+	BehaviorState UseFood(Blackboard* pBlackboard)
+	{
+		std::cout << "USING FOOD\n";
+
+		IExamInterface* pExamInterface;
+		if(!pBlackboard->GetData(BB_EXAM_INTERFACE_PTR, pExamInterface) || pExamInterface == nullptr)
+			return BehaviorState::Failure;
+
+		if(!pExamInterface->Inventory_UseItem(BB_FOOD_INV_SLOT))
+			return BehaviorState::Failure;
+
+		return BehaviorState::Success;
+	}
+
+	BehaviorState UsePistol(Blackboard* pBlackboard)
+	{
+		std::cout << "USING PISTOL\n";
+
+		IExamInterface* pExamInterface;
+		if(!pBlackboard->GetData(BB_EXAM_INTERFACE_PTR, pExamInterface) || pExamInterface == nullptr)
+			return BehaviorState::Failure;
+
+		if(!pExamInterface->Inventory_UseItem(BB_PISTOL_INV_SLOT))
+			return BehaviorState::Failure;
+
+		return BehaviorState::Success;
+	}
+
+	BehaviorState UseShotgun(Blackboard* pBlackboard)
+	{
+		std::cout << "USING SHOTGUN\n";
+
+		IExamInterface* pExamInterface;
+		if(!pBlackboard->GetData(BB_EXAM_INTERFACE_PTR, pExamInterface) || pExamInterface == nullptr)
+			return BehaviorState::Failure;
+
+		if(!pExamInterface->Inventory_UseItem(BB_SHOTGUN_INV_SLOT))
+			return BehaviorState::Failure;
+
+		return BehaviorState::Success;
+	}
 }
 
 namespace BT_Conditions
@@ -126,4 +225,320 @@ namespace BT_Conditions
 
 		return false;
 	}
+
+	bool LowHealth(Blackboard* pBlackboard)
+	{
+		// Get the agent
+		AgentInfo* pAgentInfo;
+		if(!pBlackboard->GetData(BB_AGENT_INFO_PTR, pAgentInfo) || pAgentInfo == nullptr)
+			return false;
+
+		const float healthThreshold{ 3.0f };
+		if(pAgentInfo->Health < healthThreshold)
+			return true;
+		return false;
+	}
+
+	bool SlightlyDamaged(Blackboard* pBlackboard)
+	{
+		// Get the agent
+		AgentInfo* pAgentInfo;
+		if(!pBlackboard->GetData(BB_AGENT_INFO_PTR, pAgentInfo) || pAgentInfo == nullptr)
+			return false;
+
+		const float healthThreshold{ 7.0f };
+		if(pAgentInfo->Health < healthThreshold)
+			return true;
+		return false;
+	}
+
+	bool LowEnergy(Blackboard* pBlackboard)
+	{
+		// Get the agent
+		AgentInfo* pAgentInfo;
+		if(!pBlackboard->GetData(BB_AGENT_INFO_PTR, pAgentInfo) || pAgentInfo == nullptr)
+			return false;
+
+		const float foodThreshold{ 3.0f };
+		if(pAgentInfo->Energy < foodThreshold)
+			return true;
+		return false;
+	}
+
+	bool SlightlyUsedEnergy(Blackboard* pBlackboard)
+	{
+		// Get the agent
+		AgentInfo* pAgentInfo;
+		if(!pBlackboard->GetData(BB_AGENT_INFO_PTR, pAgentInfo) || pAgentInfo == nullptr)
+			return false;
+
+		const float foodThreshold{ 7.0f };
+		if(pAgentInfo->Energy < foodThreshold)
+			return true;
+		return false;
+	}
+
+	bool HasMedkit(Blackboard* pBlackboard)
+	{
+		// Get the interface
+		IExamInterface* pInterface;
+		if(!pBlackboard->GetData(BB_EXAM_INTERFACE_PTR, pInterface) || pInterface == nullptr)
+			return false;
+
+		ItemInfo itemInfo;
+		if(!pInterface->Inventory_GetItem(BB_MEDKIT_INV_SLOT, itemInfo))
+			return false;
+		return true;
+	}
+
+	bool HasShotgun(Blackboard* pBlackboard)
+	{
+		// Get the interface
+		IExamInterface* pInterface;
+		if(!pBlackboard->GetData(BB_EXAM_INTERFACE_PTR, pInterface) || pInterface == nullptr)
+			return false;
+
+		ItemInfo itemInfo;
+		if(!pInterface->Inventory_GetItem(BB_SHOTGUN_INV_SLOT, itemInfo))
+			return false;
+		return true;
+	}
+
+	bool HasShotgunAmmo(Blackboard* pBlackboard)
+	{
+		// Get the interface
+		IExamInterface* pInterface;
+		if(!pBlackboard->GetData(BB_EXAM_INTERFACE_PTR, pInterface) || pInterface == nullptr)
+			return false;
+
+		ItemInfo itemInfo;
+		if(!pInterface->Inventory_GetItem(BB_SHOTGUN_INV_SLOT, itemInfo))
+			return false;
+
+
+		int shotgunAmmo{ pInterface->Weapon_GetAmmo(itemInfo) };
+		if(shotgunAmmo > 0)
+			return true;
+
+		return false;
+	}
+
+	bool LowShotgunAmmo(Blackboard* pBlackboard)
+	{
+		// Get the interface
+		IExamInterface* pInterface;
+		if(!pBlackboard->GetData(BB_EXAM_INTERFACE_PTR, pInterface) || pInterface == nullptr)
+			return false;
+
+		ItemInfo itemInfo;
+		if(!pInterface->Inventory_GetItem(BB_SHOTGUN_INV_SLOT, itemInfo))
+			return false;
+
+		int shotgunAmmo{ pInterface->Weapon_GetAmmo(itemInfo) };
+		if(shotgunAmmo < 2)
+			return true;
+
+		return false;
+	}
+
+	bool HasPistol(Blackboard* pBlackboard)
+	{
+		// Get the interface
+		IExamInterface* pInterface;
+		if(!pBlackboard->GetData(BB_EXAM_INTERFACE_PTR, pInterface) || pInterface == nullptr)
+			return false;
+
+		ItemInfo itemInfo;
+		if(!pInterface->Inventory_GetItem(BB_PISTOL_INV_SLOT, itemInfo))
+			return false;
+		return true;
+	}
+
+	bool HasPistolAmmo(Blackboard* pBlackboard)
+	{
+		// Get the interface
+		IExamInterface* pInterface;
+		if(!pBlackboard->GetData(BB_EXAM_INTERFACE_PTR, pInterface) || pInterface == nullptr)
+			return false;
+
+		ItemInfo itemInfo;
+		if(!pInterface->Inventory_GetItem(BB_PISTOL_INV_SLOT, itemInfo))
+			return false;
+
+		int pistolAmmo{ pInterface->Weapon_GetAmmo(itemInfo) };
+		if(pistolAmmo > 0)
+			return true;
+
+		return false;
+	}
+
+	bool LowPistolAmmo(Blackboard* pBlackboard)
+	{
+		// Get the interface
+		IExamInterface* pInterface;
+		if(!pBlackboard->GetData(BB_EXAM_INTERFACE_PTR, pInterface) || pInterface == nullptr)
+			return false;
+
+		ItemInfo itemInfo;
+		if(!pInterface->Inventory_GetItem(BB_PISTOL_INV_SLOT, itemInfo))
+			return false;
+
+		int shotgunAmmo{ pInterface->Weapon_GetAmmo(itemInfo) };
+		if(shotgunAmmo < 4)
+			return true;
+
+		return false;
+	}
+
+	bool HasFood(Blackboard* pBlackboard)
+	{
+		// Get the interface
+		IExamInterface* pInterface;
+		if(!pBlackboard->GetData(BB_EXAM_INTERFACE_PTR, pInterface) || pInterface == nullptr)
+			return false;
+
+		ItemInfo itemInfo;
+		if(!pInterface->Inventory_GetItem(BB_FOOD_INV_SLOT, itemInfo))
+			return false;
+		return true;
+	}
+
+
+	bool EnemyNearby(Blackboard* pBlackboard)
+	{
+		const float nearbyRadius{ 20.0f };  // Radius which is considered to be NEARBY
+
+		// Get the agent
+		AgentInfo* pAgentInfo;
+		if(!pBlackboard->GetData(BB_AGENT_INFO_PTR, pAgentInfo) || pAgentInfo == nullptr)
+			return false;
+
+		// Get the interface
+		std::vector<EnemyInfoExtended>* pEnemiesVec;
+		if(!pBlackboard->GetData(BB_ENEMIES_PTR, pEnemiesVec) || pEnemiesVec == nullptr)
+			return false;
+
+
+		// Check if there are enemies nearby
+		for(const EnemyInfoExtended& enemy : *pEnemiesVec)
+		{
+			if(enemy.Location.Distance(pAgentInfo->Position) < nearbyRadius)
+				return true;
+		}
+
+		return false;
+	}
+
+	bool PistolNearby(Blackboard* pBlackboard)
+	{
+		const float nearbyRadius{ 20.0f };  // Radius which is considered to be NEARBY
+
+		// Get the agent
+		AgentInfo* pAgentInfo;
+		if(!pBlackboard->GetData(BB_AGENT_INFO_PTR, pAgentInfo) || pAgentInfo == nullptr)
+			return false;
+
+		// Get the interface
+		std::vector<ItemInfo>* pItemsVec;
+		if(!pBlackboard->GetData(BB_ITEMS_PTR, pItemsVec) || pItemsVec == nullptr)
+			return false;
+
+		for(const ItemInfo& item : *pItemsVec)
+		{
+			if(item.Type == eItemType::PISTOL && item.Location.Distance(pAgentInfo->Position) < nearbyRadius)
+				return true;
+		}
+		return false;
+	}
+
+	bool ShotgunNearby(Blackboard* pBlackboard)
+	{
+		const float nearbyRadius{ 20.0f };  // Radius which is considered to be NEARBY
+
+		// Get the agent
+		AgentInfo* pAgentInfo;
+		if(!pBlackboard->GetData(BB_AGENT_INFO_PTR, pAgentInfo) || pAgentInfo == nullptr)
+			return false;
+
+		// Get the interface
+		std::vector<ItemInfo>* pItemsVec;
+		if(!pBlackboard->GetData(BB_ITEMS_PTR, pItemsVec) || pItemsVec == nullptr)
+			return false;
+
+		for(const ItemInfo& item : *pItemsVec)
+		{
+			if(item.Type == eItemType::SHOTGUN && item.Location.Distance(pAgentInfo->Position) < nearbyRadius)
+				return true;
+		}
+		return false;
+	}
+
+	bool FoodNearby(Blackboard* pBlackboard)
+	{
+		const float nearbyRadius{ 20.0f };  // Radius which is considered to be NEARBY
+
+		// Get the agent
+		AgentInfo* pAgentInfo;
+		if(!pBlackboard->GetData(BB_AGENT_INFO_PTR, pAgentInfo) || pAgentInfo == nullptr)
+			return false;
+
+		// Get the interface
+		std::vector<ItemInfo>* pItemsVec;
+		if(!pBlackboard->GetData(BB_ITEMS_PTR, pItemsVec) || pItemsVec == nullptr)
+			return false;
+
+		for(const ItemInfo& item : *pItemsVec)
+		{
+			if(item.Type == eItemType::FOOD && item.Location.Distance(pAgentInfo->Position) < nearbyRadius)
+				return true;
+		}
+		return false;
+	}
+
+	bool MedkitNearby(Blackboard* pBlackboard)
+	{
+		const float nearbyRadius{ 20.0f };  // Radius which is considered to be NEARBY
+
+		// Get the agent
+		AgentInfo* pAgentInfo;
+		if(!pBlackboard->GetData(BB_AGENT_INFO_PTR, pAgentInfo) || pAgentInfo == nullptr)
+			return false;
+
+		// Get the interface
+		std::vector<ItemInfo>* pItemsVec;
+		if(!pBlackboard->GetData(BB_ITEMS_PTR, pItemsVec) || pItemsVec == nullptr)
+			return false;
+
+		for(const ItemInfo& item : *pItemsVec)
+		{
+			if(item.Type == eItemType::MEDKIT && item.Location.Distance(pAgentInfo->Position) < nearbyRadius)
+				return true;
+		}
+		return false;
+	}
+
+	bool LootableHouseNearby(Blackboard* pBlackboard)
+	{
+		const float nearbyRadius{ 50.0f };
+
+		// Get the agent
+		AgentInfo* pAgentInfo;
+		if(!pBlackboard->GetData(BB_AGENT_INFO_PTR, pAgentInfo) || pAgentInfo == nullptr)
+			return false;
+
+		// Get the interface
+		std::vector<HouseInfoExtended>* pHouseVec;
+		if(!pBlackboard->GetData(BB_HOUSES_PTR, pHouseVec) || pHouseVec == nullptr)
+			return false;
+
+		for(const HouseInfoExtended& house : *pHouseVec)
+		{
+			if(house.Looted == false && house.Center.Distance(pAgentInfo->Position) < nearbyRadius)
+				return true;
+		}
+		return false;
+	}
+
+
+
 }
