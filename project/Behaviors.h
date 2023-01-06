@@ -24,7 +24,6 @@
 #define BB_STEERING_TARGET "targetPos"
 #define BB_ANGULAR_VELOCITY "angularVelocity"
 #define BB_CAN_RUN "canRun"
-#define BB_AIM_TO_TARGET "aimToTarget"
 
 // INVENTORY SLOTS
 #define BB_SHOTGUN_INV_SLOT 0
@@ -33,7 +32,7 @@
 #define BB_FOOD_INV_SLOT 3
 #define BB_UNUSED_INV_SLOT 4  // Unused slot, could be used as extra slot for either of the previous, if need be (medkit might be nice)
 
-#define DEBUG_MESSAGES
+//#define DEBUG_MESSAGES
 
 namespace BT_Utils
 {
@@ -45,6 +44,32 @@ namespace BT_Utils
 		const Elite::Vector2 invDirection{ agentPos - target };
 		const Elite::Vector2 fleeTarget{ agentPos + invDirection };
 		return fleeTarget;
+	}
+
+	bool AimTowardsTarget(Blackboard* pBlackboard, const AgentInfo* pAgent, Elite::Vector2 target)
+	{
+		// Change the angular rotation based on where the steeringtarget is
+		const Elite::Vector2 vectorToTarget{ target - pAgent->Position };
+		const Elite::Vector2 orientationVector{ cosf(pAgent->Orientation), sinf(pAgent->Orientation) };
+		const float angleBetween{ AngleBetween(vectorToTarget, orientationVector) };
+
+
+
+		if(angleBetween > 0.0f)
+		{
+			if(!pBlackboard->ChangeData(BB_ANGULAR_VELOCITY, -1.0f))
+				return false;
+
+			return true;
+		}
+		else
+		{
+			if(!pBlackboard->ChangeData(BB_ANGULAR_VELOCITY, 1.0f))
+				return false;
+
+			return true;
+		}
+		return true;
 	}
 
 
@@ -129,6 +154,9 @@ namespace BT_Actions
 	BehaviorState GoToClosestLootableHouse(Blackboard* pBlackboard)
 	{
 		PrintColorAction("GOING TO CLOSEST LOOTABLE HOUSE");
+
+		const float timeBeforeLooted{ 3.5f }; // Time before visited house is considered to be looted;
+
 		// Get the agent
 		AgentInfo* pAgentInfo;
 		if(!pBlackboard->GetData(BB_AGENT_INFO_PTR, pAgentInfo) || pAgentInfo == nullptr)
@@ -157,7 +185,7 @@ namespace BT_Actions
 					{
 						house.EnteredTime = currentTime;
 					}
-					else if((currentTime - house.EnteredTime) > 5.0f)
+					else if((currentTime - house.EnteredTime) > timeBeforeLooted)
 					{
 						house.EnteredTime = -1.0f;
 						house.LastVisitTime = currentTime;
@@ -286,6 +314,9 @@ namespace BT_Actions
 		if(!pBlackboard->ChangeData(BB_STEERING_TARGET, closestItem.Location))
 			return BehaviorState::Failure;
 
+		if(!AimTowardsTarget(pBlackboard, pAgentInfo, closestItem.Location))
+			return BehaviorState::Failure;
+
 		return BehaviorState::Success;
 	}
 
@@ -345,6 +376,9 @@ namespace BT_Actions
 
 		// Set target in the blackboard
 		if(!pBlackboard->ChangeData(BB_STEERING_TARGET, closestItem.Location))
+			return BehaviorState::Failure;
+
+		if(!AimTowardsTarget(pBlackboard, pAgentInfo, closestItem.Location))
 			return BehaviorState::Failure;
 
 		return BehaviorState::Success;
@@ -408,6 +442,9 @@ namespace BT_Actions
 		if(!pBlackboard->ChangeData(BB_STEERING_TARGET, closestItem.Location))
 			return BehaviorState::Failure;
 
+		if(!AimTowardsTarget(pBlackboard, pAgentInfo, closestItem.Location))
+			return BehaviorState::Failure;
+
 		return BehaviorState::Success;
 	}
 
@@ -467,6 +504,9 @@ namespace BT_Actions
 
 		// Set target in the blackboard
 		if(!pBlackboard->ChangeData(BB_STEERING_TARGET, closestItem.Location))
+			return BehaviorState::Failure;
+
+		if(!AimTowardsTarget(pBlackboard, pAgentInfo, closestItem.Location))
 			return BehaviorState::Failure;
 
 		return BehaviorState::Success;
@@ -530,6 +570,9 @@ namespace BT_Actions
 		if(!pBlackboard->ChangeData(BB_STEERING_TARGET, closestItem.Location))
 			return BehaviorState::Failure;
 
+		if(!AimTowardsTarget(pBlackboard, pAgentInfo, closestItem.Location))
+			return BehaviorState::Failure;
+
 		return BehaviorState::Success;
 
 
@@ -539,32 +582,33 @@ namespace BT_Actions
 	{
 		PrintColorAction("ATTEMPTING TO AIM AT STEERING TARGET");
 
-
-		if(!pBlackboard->ChangeData(BB_AIM_TO_TARGET, true))
+		// Get the agent
+		AgentInfo* pAgentInfo;
+		if(!pBlackboard->GetData(BB_AGENT_INFO_PTR, pAgentInfo) || pAgentInfo == nullptr)
 			return BehaviorState::Failure;
 
+		// Get the steering target
+		Elite::Vector2 steeringTarget;
+		if(!pBlackboard->GetData(BB_STEERING_TARGET, steeringTarget))
+			return BehaviorState::Failure;
+
+
+		// Change the angular rotation based on where the steeringtarget is
+		const Elite::Vector2 vectorToTarget{ steeringTarget - pAgentInfo->Position };
+		const float vectorToAngle{ atan2f(vectorToTarget.y, vectorToTarget.x) };
+
+		const float aimOffset{ vectorToAngle - pAgentInfo->Orientation };
+
+		if(abs(aimOffset) > 0.05f)
+		{
+			if(!pBlackboard->ChangeData(BB_ANGULAR_VELOCITY, Elite::Clamp(aimOffset, -1.0f, 1.0f)))
+				return BehaviorState::Failure;
+
+			return BehaviorState::Success;
+		}
+
+
 		return BehaviorState::Success;
-		//// Try to aim towards the item
-		//// Change the angular rotation based on where the enemy is
-		//const Elite::Vector2 vectorToTarget{ closestItem.Location - pAgentInfo->Position };
-		//const float vectorToAngle{ atan2f(vectorToTarget.y, vectorToTarget.x) };
-
-		//if(vectorToAngle > pAgentInfo->Orientation)
-		//{
-		//	if(!pBlackboard->ChangeData(BB_ANGULAR_VELOCITY, 1.0f))
-		//		return BehaviorState::Failure;
-
-		//	return BehaviorState::Success;
-		//}
-		//else
-		//{
-		//	if(!pBlackboard->ChangeData(BB_ANGULAR_VELOCITY, -1.0f))
-		//		return BehaviorState::Failure;
-
-		//	return BehaviorState::Success;
-		//}
-
-		//return BehaviorState::Success;
 	}
 
 	BehaviorState UseMedkit(Blackboard* pBlackboard)
@@ -661,7 +705,7 @@ namespace BT_Actions
 		// Rotate the player so it looks around
 		PrintColorAction("SCANNING AREA");
 
-		if(!pBlackboard->ChangeData(BB_ANGULAR_VELOCITY, 1.0f))
+		if(!pBlackboard->ChangeData(BB_ANGULAR_VELOCITY, 10.0f))
 			return BehaviorState::Failure;
 		return BehaviorState::Success;
 
@@ -697,24 +741,45 @@ namespace BT_Actions
 			return BehaviorState::Failure;
 
 		// Change the angular rotation based on where the enemy is
-		const Elite::Vector2 vectorToTarget{ closestEnemy.Location - pAgentInfo->Position };
-		const float vectorToAngle{ atan2f(vectorToTarget.y, vectorToTarget.x) };
+		if(!AimTowardsTarget(pBlackboard, pAgentInfo, closestEnemy.Location))
+			return BehaviorState::Failure;
 
-		if(vectorToAngle > pAgentInfo->Orientation)
+		return BehaviorState::Success;
+	}
+
+	BehaviorState BurstSprint(Blackboard* pBlackboard)
+	{
+		// Sprints if stamina bar is greater than threshold
+		// Get the agent
+		AgentInfo* pAgentInfo;
+		if(!pBlackboard->GetData(BB_AGENT_INFO_PTR, pAgentInfo) || pAgentInfo == nullptr)
+			return BehaviorState::Failure;
+
+		const float staminaThreshold{ 7.0f };
+		if(pAgentInfo->Stamina > staminaThreshold)
 		{
-			if(!pBlackboard->ChangeData(BB_ANGULAR_VELOCITY, 1.0f))
+			if(!pBlackboard->ChangeData(BB_CAN_RUN, true))
 				return BehaviorState::Failure;
-
-			return BehaviorState::Success;
 		}
 		else
 		{
-			if(!pBlackboard->ChangeData(BB_ANGULAR_VELOCITY, -1.0f))
+			if(!pBlackboard->ChangeData(BB_CAN_RUN, false))
 				return BehaviorState::Failure;
-
-			return BehaviorState::Success;
 		}
+		return BehaviorState::Success;
+	}
 
+	BehaviorState Sprint(Blackboard* pBlackboard)
+	{
+		// Get the agent
+		AgentInfo* pAgentInfo;
+		if(!pBlackboard->GetData(BB_AGENT_INFO_PTR, pAgentInfo) || pAgentInfo == nullptr)
+			return BehaviorState::Failure;
+
+		if(!pBlackboard->ChangeData(BB_CAN_RUN, true))
+			return BehaviorState::Failure;
+
+		return BehaviorState::Success;
 	}
 }
 
@@ -1219,6 +1284,13 @@ namespace BT_Conditions
 		{
 			return true;
 		}
+		return false;
+	}
+
+	bool Continue(Blackboard* pBlackboard)
+	{
+		// Returns false so that upcomming actions can still fire;
+		PrintColorCondition("CONTINUEING BEHAVIOR TREE");
 		return false;
 	}
 }

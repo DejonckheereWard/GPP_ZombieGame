@@ -143,8 +143,10 @@ SteeringPlugin_Output Plugin::UpdateSteering(float dt)
 	// This is basically the main update function (the other update is debug only)
 	m_CurrentTime += dt;  // Keep track of total time since program started (used for timestamping events)
 
-	std::cout << "-------------- UPDATING STEERING --------------\n";
-	std::cout << "------------- CURRENT TIME: " << m_CurrentTime << " ------------\n";
+	//std::cout << "-------------- UPDATING STEERING --------------\n";
+	//std::cout << "------------- CURRENT TIME: " << m_CurrentTime << " ------------\n";
+
+	//std::cout << "AGENT ORIENTATION: " << m_pInterface->Agent_GetInfo().Orientation << std::endl;
 
 	// Reset target before update
 	ResetOutputVariables(m_pBlackboard);
@@ -190,7 +192,7 @@ SteeringPlugin_Output Plugin::UpdateSteering(float dt)
 	}
 
 	//steering.AngularVelocity = m_AngSpeed; //Rotate your character to inspect the world while walking
-	steering.AutoOrient = m_AimToTarget; //Setting AutoOrient to TRue overrides the AngularVelocity
+	steering.AutoOrient = false; //Setting AutoOrient to TRue overrides the AngularVelocity
 	steering.RunMode = m_CanRun; //If RunMode is True > MaxLinSpd is increased for a limited time (till your stamina runs out)
 
 
@@ -200,6 +202,7 @@ SteeringPlugin_Output Plugin::UpdateSteering(float dt)
 //This function should only be used for rendering debug elements
 void Plugin::Render(float dt) const
 {
+
 	//This Render function should only contain calls to Interface->Draw_... functions
 	m_pInterface->Draw_SolidCircle(m_Target, .7f, { 0,0 }, { 1, 0, 0 });
 
@@ -212,8 +215,13 @@ void Plugin::Render(float dt) const
 		m_pInterface->Draw_Segment(current.Location, next.Location, {});
 	}
 
-	// Draw line to steering target
-	m_pInterface->Draw_Segment(m_pInterface->Agent_GetInfo().Position, m_SteeringTarget, { 1, 0, 0 });
+	// Draw line to steering target & circle
+	m_pInterface->Draw_Segment(m_pInterface->Agent_GetInfo().Position, m_SteeringTarget, { 1, 0, 0 }, m_pInterface->NextDepthSlice());
+	m_pInterface->Draw_SolidCircle(m_SteeringTarget, .5f, {}, { 1, 0, 0 }, m_pInterface->NextDepthSlice());
+
+	// Draw line to navmeshtarget & circle
+	m_pInterface->Draw_Segment(m_pInterface->Agent_GetInfo().Position, m_NavMeshTarget, { 0, 1, 0 }, m_pInterface->NextDepthSlice());
+	m_pInterface->Draw_SolidCircle(m_NavMeshTarget, .5f, {}, { 0, 1, 0 }, m_pInterface->NextDepthSlice());
 }
 
 std::vector<HouseInfo> Plugin::GetHousesInFOV() const
@@ -276,7 +284,6 @@ Blackboard* Plugin::CreateBlackboard()
 	// OUTPUT DATA
 	pBlackboard->AddData(BB_STEERING_TARGET, m_SteeringTarget);
 	pBlackboard->AddData(BB_CAN_RUN, m_CanRun);
-	pBlackboard->AddData(BB_AIM_TO_TARGET, m_AimToTarget);
 	pBlackboard->AddData(BB_ANGULAR_VELOCITY, m_AngularVelocity);
 	//pBlackboard->AddData(BB_LOOK_DIRECTION, Elite::Vector2());
 
@@ -318,6 +325,7 @@ BehaviorTree* Plugin::CreateBehaviortree(Blackboard* pBlackboard) const
 						new BehaviorConditional(BT_Conditions::HasShotgun),
 						new BehaviorConditional(BT_Conditions::HasShotgunAmmo),
 						new BehaviorAction(BT_Actions::LookAtClosestEnemy),
+						new BehaviorAction(BT_Actions::BurstSprint),
 						new BehaviorConditional(BT_Conditions::IsLookingAtClosestEnemy),
 						new BehaviorAction(BT_Actions::UseShotgun)  // LOOK AT + USE WEAPON
 					}),
@@ -325,10 +333,21 @@ BehaviorTree* Plugin::CreateBehaviortree(Blackboard* pBlackboard) const
 						new BehaviorConditional(BT_Conditions::HasPistol),
 						new BehaviorConditional(BT_Conditions::HasPistolAmmo),
 						new BehaviorAction(BT_Actions::LookAtClosestEnemy),
+						new BehaviorAction(BT_Actions::BurstSprint),
 						new BehaviorConditional(BT_Conditions::IsLookingAtClosestEnemy),
 						new BehaviorAction(BT_Actions::UsePistol)  // LOOK AT + USE WEAPON
 					}),
-					//new BehaviorAction(BT_Actions::FleeFromEnemies)
+					new BehaviorSelector({
+						new BehaviorSequence({
+							new BehaviorConditional(BT_Conditions::LowHealth),
+							new BehaviorAction(BT_Actions::Sprint),
+							new BehaviorConditional(BT_Conditions::Continue)
+						}),
+						new BehaviorSequence({
+							new BehaviorAction(BT_Actions::BurstSprint),
+							new BehaviorConditional(BT_Conditions::Continue)
+						})
+					})
 				})
 			}),
 
@@ -344,13 +363,13 @@ BehaviorTree* Plugin::CreateBehaviortree(Blackboard* pBlackboard) const
 							new BehaviorSequence({
 								// Check if we already have a weapon, or if we are low on ammo
 								new BehaviorConditional(BT_Conditions::HasNoPistol),
-								new BehaviorAction(BT_Actions::AimTowardsSteeringTarget),
+								//new BehaviorAction(BT_Actions::AimTowardsSteeringTarget),
 								new BehaviorAction(BT_Actions::GrabClosestPistol)
 							}),
 							new BehaviorSequence({
 								new BehaviorConditional(BT_Conditions::HasPistol),
 								new BehaviorConditional(BT_Conditions::LowPistolAmmo),
-								new BehaviorAction(BT_Actions::AimTowardsSteeringTarget),
+								//new BehaviorAction(BT_Actions::AimTowardsSteeringTarget),
 								new BehaviorAction(BT_Actions::GrabClosestPistol)  // GOTO + GRAB IF IN RANGE
 							})
 						}),
@@ -364,13 +383,13 @@ BehaviorTree* Plugin::CreateBehaviortree(Blackboard* pBlackboard) const
 							new BehaviorSequence({
 								// Check if we already have a weapon, or if we are low on ammo
 								new BehaviorConditional(BT_Conditions::HasNoShotgun),
-								new BehaviorAction(BT_Actions::AimTowardsSteeringTarget),
+								//new BehaviorAction(BT_Actions::AimTowardsSteeringTarget),
 								new BehaviorAction(BT_Actions::GrabClosestShotgun)
 							}),
 							new BehaviorSequence({
 								new BehaviorConditional(BT_Conditions::HasShotgun),
 								new BehaviorConditional(BT_Conditions::LowShotgunAmmo),
-								new BehaviorAction(BT_Actions::AimTowardsSteeringTarget),
+								//new BehaviorAction(BT_Actions::AimTowardsSteeringTarget),
 								new BehaviorAction(BT_Actions::GrabClosestShotgun)  // GOTO + GRAB IF IN RANGE
 							})
 						}),
@@ -382,13 +401,13 @@ BehaviorTree* Plugin::CreateBehaviortree(Blackboard* pBlackboard) const
 						new BehaviorSelector({
 							new BehaviorSequence({
 								new BehaviorConditional(BT_Conditions::HasNoMedkit),
-								new BehaviorAction(BT_Actions::AimTowardsSteeringTarget),
+								//new BehaviorAction(BT_Actions::AimTowardsSteeringTarget),
 								new BehaviorAction(BT_Actions::GrabClosestMedkit),
 							}),
 							new BehaviorSequence({
 								new BehaviorConditional(BT_Conditions::SlightlyDamaged),
 								new BehaviorAction(BT_Actions::UseMedkit),
-								new BehaviorAction(BT_Actions::AimTowardsSteeringTarget),
+								//new BehaviorAction(BT_Actions::AimTowardsSteeringTarget),
 								new BehaviorAction(BT_Actions::GrabClosestMedkit)
 							})
 						}),
@@ -400,13 +419,13 @@ BehaviorTree* Plugin::CreateBehaviortree(Blackboard* pBlackboard) const
 						new BehaviorSelector({
 							new BehaviorSequence({
 								new BehaviorConditional(BT_Conditions::HasNoFood),  // By using selector, grabclosestfood will only exec if hasfood is false
-								new BehaviorAction(BT_Actions::AimTowardsSteeringTarget),
+								//new BehaviorAction(BT_Actions::AimTowardsSteeringTarget),
 								new BehaviorAction(BT_Actions::GrabClosestFood)
 							}),
 							new BehaviorSequence({
 								new BehaviorConditional(BT_Conditions::SlightlyUsedEnergy),  // True if player lost a little of energy, but its not low
 								new BehaviorAction(BT_Actions::UseFood),
-								new BehaviorAction(BT_Actions::AimTowardsSteeringTarget),
+								//new BehaviorAction(BT_Actions::AimTowardsSteeringTarget),
 								new BehaviorAction(BT_Actions::GrabClosestFood)
 							})
 						})
@@ -415,7 +434,7 @@ BehaviorTree* Plugin::CreateBehaviortree(Blackboard* pBlackboard) const
 					// Garbage
 					new BehaviorSequence({
 						new BehaviorConditional(BT_Conditions::GarbageNearby),
-						new BehaviorAction(BT_Actions::AimTowardsSteeringTarget),
+						//new BehaviorAction(BT_Actions::AimTowardsSteeringTarget),
 						new BehaviorAction(BT_Actions::DestroyClosestGarbage),
 					})
 				})
@@ -500,6 +519,8 @@ void Plugin::InitCheckpoints()
 
 void Plugin::CheckForNewHouses()
 {
+	const float resetThreshold{ 180.0f };  // Time before a house gets reset;
+
 	// Get all houses in FOV
 	std::vector<HouseInfo> housesInFov = GetHousesInFOV();
 
@@ -521,6 +542,21 @@ void Plugin::CheckForNewHouses()
 		{
 			HouseInfoExtended house{ houseInFov };
 			m_Houses.push_back(house);
+		}
+	}
+
+	// Loop through the list of found houses, if any of the houses is looted, and its a long time ago, we can reset the looted status
+	for(HouseInfoExtended& house : m_Houses)
+	{
+		if(house.Looted)
+		{
+			const float timeSinceVisit{ m_CurrentTime - house.LastVisitTime };
+			if(timeSinceVisit > resetThreshold)
+			{
+				house.Looted = false;
+				house.LastVisitTime = -1.0f;
+				house.EnteredTime = -1.0f;
+			}
 		}
 	}
 }
@@ -658,7 +694,6 @@ void Plugin::UpdateOutputVariables(Blackboard* pBlackboard)
 	bool result{ true };
 	result &= pBlackboard->GetData(BB_STEERING_TARGET, m_SteeringTarget);
 	result &= pBlackboard->GetData(BB_CAN_RUN, m_CanRun);
-	result &= pBlackboard->GetData(BB_AIM_TO_TARGET, m_AimToTarget);
 	result &= pBlackboard->GetData(BB_ANGULAR_VELOCITY, m_AngularVelocity);
 
 	if(!result)
@@ -673,12 +708,10 @@ void Plugin::ResetOutputVariables(Blackboard* pBlackboard)
 	m_SteeringTarget = m_pInterface->Agent_GetInfo().Position;  // Reset to current position, not 0
 	m_AngularVelocity = 0;
 	m_CanRun = false;
-	m_AimToTarget = false;
 
 
 	bool result{ true };
 	result &= pBlackboard->ChangeData(BB_STEERING_TARGET, m_SteeringTarget);
 	result &= pBlackboard->ChangeData(BB_CAN_RUN, m_CanRun);
-	result &= pBlackboard->ChangeData(BB_AIM_TO_TARGET, m_AimToTarget);
 	result &= pBlackboard->ChangeData(BB_ANGULAR_VELOCITY, m_AngularVelocity);
 }
