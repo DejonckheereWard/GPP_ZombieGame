@@ -31,6 +31,7 @@ private:
 	std::vector<EntityInfo> GetEntitiesInFOV() const;
 
 	Elite::Vector2 m_Target = {};
+	bool m_EnableBreakpoint = false; // Debug purpose -> When Return key is pressed, will break the program (by setting breakpoint after if)
 	bool m_GrabItem = false; //Demo purpose
 	bool m_UseItem = false; //Demo purpose
 	bool m_RemoveItem = false; //Demo purpose
@@ -50,15 +51,21 @@ private:
 	std::vector<EnemyInfoExtended> m_Enemies;
 	std::vector<PurgeZoneInfoExtended> m_PurgeZones;
 
+	// Extra Data
+	std::vector<Checkpoint> m_Checkpoints;  // Holds checkpoints for the agent to go to, and explore the map
+
 	// OUTPUT VARS (Changed by the behaviortree for the plugin to act on)
 	Elite::Vector2 m_SteeringTarget{};
+	float m_AngularVelocity{};  // -1, 0, 1 (direction in which agent wants to rotate)
 	bool m_CanRun = false;
+
 
 
 
 	Blackboard* CreateBlackboard();
 	BehaviorTree* CreateBehaviortree(Blackboard* pBlackboard) const;
 
+	void InitCheckpoints();
 
 	void CheckForNewHouses();
 	void CheckForNewEntities();
@@ -68,7 +75,7 @@ private:
 	void UpdateEntities();
 
 	void UpdateOutputVariables(Blackboard* pBlackboard);
-	void ResetOutputVariables();
+	void ResetOutputVariables(Blackboard* pBlackboard);
 };
 
 //ENTRY

@@ -50,3 +50,11 @@ struct EnemyInfoExtended: public EnemyInfo
 
 	float LastSeenTime{ -1.0f };
 };
+
+
+struct Checkpoint
+{
+	Elite::Vector2 Location{};
+	bool IsVisited{ false };
+	float LastVisitTime{ -1.0f };  // Timestamp of last visit
+};

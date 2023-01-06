@@ -13,8 +13,6 @@ Plugin::Plugin():
 
 Plugin::~Plugin()
 {
-	//delete m_pBehaviorTree;
-	//delete m_pBlackboard;
 }
 
 //Called only once, during initialization
@@ -32,6 +30,7 @@ void Plugin::Initialize(IBaseInterface* pInterface, PluginInfo& info)
 	info.Student_Class = "2DAE07";
 
 
+	InitCheckpoints();
 	m_pBlackboard = CreateBlackboard();
 	m_pBehaviorTree = CreateBehaviortree(m_pBlackboard);
 }
@@ -72,6 +71,7 @@ void Plugin::InitGameDebugParams(GameDebugParams& params)
 //(=Use only for Debug Purposes)
 void Plugin::Update(float dt)
 {
+	m_EnableBreakpoint = false;
 	//Demo Event Code
 	//In the end your AI should be able to walk around without external input
 	if(m_pInterface->Input_IsMouseButtonUp(Elite::InputMouseButton::eLeft))
@@ -84,6 +84,10 @@ void Plugin::Update(float dt)
 	else if(m_pInterface->Input_IsKeyboardKeyDown(Elite::eScancode_Space))
 	{
 		m_CanRun = true;
+	}
+	else if(m_pInterface->Input_IsKeyboardKeyDown(Elite::eScancode_Return))
+	{
+		m_EnableBreakpoint = true;
 	}
 	else if(m_pInterface->Input_IsKeyboardKeyDown(Elite::eScancode_Left))
 	{
@@ -138,10 +142,11 @@ SteeringPlugin_Output Plugin::UpdateSteering(float dt)
 	// This is basically the main update function (the other update is debug only)
 	m_CurrentTime += dt;  // Keep track of total time since program started (used for timestamping events)
 
+	std::cout << "-------------- UPDATING STEERING --------------\n";
+	std::cout << "------------- CURRENT TIME: " << m_CurrentTime << " ------------\n";
+
 	// Reset target before update
-
-	m_pBlackboard->ChangeData(BB_STEERING_TARGET, Elite::Vector2());
-
+	ResetOutputVariables(m_pBlackboard);
 	CheckForNewHouses();
 	CheckForNewEntities();
 	UpdateEntities();  // Updates and cleans up the storage of entities where needed
@@ -149,6 +154,9 @@ SteeringPlugin_Output Plugin::UpdateSteering(float dt)
 	m_pBehaviorTree->Update(dt);
 
 	UpdateOutputVariables(m_pBlackboard);  // Copies output variables into the member variables as needed
+
+	if(m_EnableBreakpoint)
+		std::cout << "BREAKPOINT HERE\n";
 
 	Elite::Vector2 behaviorTarget{};
 	m_pBlackboard->GetData(BB_STEERING_TARGET, behaviorTarget);
@@ -171,13 +179,16 @@ SteeringPlugin_Output Plugin::UpdateSteering(float dt)
 	steering.LinearVelocity.Normalize(); //Normalize Desired Velocity
 	steering.LinearVelocity *= agentInfo.MaxLinearSpeed; //Rescale to Max Speed
 
+	steering.AngularVelocity = m_AngularVelocity;
+	steering.AngularVelocity *= agentInfo.MaxAngularSpeed;
+
 	if(Distance(nextTargetPos, agentInfo.Position) < 2.f)
 	{
 		steering.LinearVelocity = Elite::ZeroVector2;
 	}
 
 	//steering.AngularVelocity = m_AngSpeed; //Rotate your character to inspect the world while walking
-	steering.AutoOrient = true; //Setting AutoOrient to TRue overrides the AngularVelocity
+	steering.AutoOrient = false; //Setting AutoOrient to TRue overrides the AngularVelocity
 	steering.RunMode = m_CanRun; //If RunMode is True > MaxLinSpd is increased for a limited time (till your stamina runs out)
 
 
@@ -189,6 +200,15 @@ void Plugin::Render(float dt) const
 {
 	//This Render function should only contain calls to Interface->Draw_... functions
 	m_pInterface->Draw_SolidCircle(m_Target, .7f, { 0,0 }, { 1, 0, 0 });
+
+
+	// Draw lines between the checkpoints
+	for(size_t i{}; i < m_Checkpoints.size(); ++i)
+	{
+		const Checkpoint& current = m_Checkpoints[i];
+		const Checkpoint& next = m_Checkpoints[(i + 1) % m_Checkpoints.size()];
+		m_pInterface->Draw_Segment(current.Location, next.Location, {});
+	}
 }
 
 std::vector<HouseInfo> Plugin::GetHousesInFOV() const
@@ -244,9 +264,14 @@ Blackboard* Plugin::CreateBlackboard()
 	pBlackboard->AddData(BB_WORLD_INFO_PTR, &m_pInterface->World_GetInfo());  // Worldinfo doesnt get hashed
 	pBlackboard->AddData(BB_EXAM_INTERFACE_PTR, m_pInterface);
 
+	// Extra INPUT
+	pBlackboard->AddData(BB_CHECKPOINTS_PTR, &m_Checkpoints);
+	pBlackboard->AddData(BB_CURRENT_TIME, m_CurrentTime);
+
 	// OUTPUT DATA
 	pBlackboard->AddData(BB_STEERING_TARGET, m_SteeringTarget);
 	pBlackboard->AddData(BB_CAN_RUN, m_CanRun);
+	pBlackboard->AddData(BB_ANGULAR_VELOCITY, m_AngularVelocity);
 	//pBlackboard->AddData(BB_LOOK_DIRECTION, Elite::Vector2());
 
 	return pBlackboard;
@@ -255,12 +280,6 @@ Blackboard* Plugin::CreateBlackboard()
 
 BehaviorTree* Plugin::CreateBehaviortree(Blackboard* pBlackboard) const
 {
-	/// <summary>
-	/// 
-	/// </summary>
-	/// <param name="pBlackboard"></param>
-	/// <returns></returns>
-
 	// Order of the behaviortree should be from highest priority to lowest priority
 	// Ex. Running away from enemy has a higher priority than going to a house
 	return new BehaviorTree(m_pBlackboard,
@@ -290,9 +309,17 @@ BehaviorTree* Plugin::CreateBehaviortree(Blackboard* pBlackboard) const
 				new BehaviorConditional(BT_Conditions::EnemyNearby),
 				new BehaviorSelector({
 					new BehaviorSequence({
+						new BehaviorConditional(BT_Conditions::HasShotgun),
+						new BehaviorConditional(BT_Conditions::HasShotgunAmmo),
+						new BehaviorAction(BT_Actions::LookAtClosestEnemy),
+						new BehaviorConditional(BT_Conditions::IsLookingAtClosestEnemy),
+						new BehaviorAction(BT_Actions::UseShotgun)  // LOOK AT + USE WEAPON
+					}),
+					new BehaviorSequence({
 						new BehaviorConditional(BT_Conditions::HasPistol),
 						new BehaviorConditional(BT_Conditions::HasPistolAmmo),
-						//new BehaviorAction(BT_Actions::LookAtClosestEnemy),
+						new BehaviorAction(BT_Actions::LookAtClosestEnemy),
+						new BehaviorConditional(BT_Conditions::IsLookingAtClosestEnemy),
 						new BehaviorAction(BT_Actions::UsePistol)  // LOOK AT + USE WEAPON
 					}),
 					//new BehaviorAction(BT_Actions::FleeFromEnemies)
@@ -303,34 +330,40 @@ BehaviorTree* Plugin::CreateBehaviortree(Blackboard* pBlackboard) const
 			new BehaviorSequence({
 				// Check items
 				new BehaviorSelector({
-					// Weapons (Might need to split up into shotgun and pistol)
+					// Pistol
 					new BehaviorSequence({
 						// Check if there is a weapon nearby
 						new BehaviorConditional(BT_Conditions::PistolNearby),
 						new BehaviorSelector({
-							// Check if we already have a weapon, or if we are low on ammo
-							new BehaviorConditional(BT_Conditions::HasPistol),
-							new BehaviorAction(BT_Actions::GrabClosestPistol)
+							new BehaviorSelector({
+								// Check if we already have a weapon, or if we are low on ammo
+								new BehaviorConditional(BT_Conditions::HasPistol),
+								new BehaviorAction(BT_Actions::GrabClosestPistol)
+							}),
+							new BehaviorSequence({
+								new BehaviorConditional(BT_Conditions::HasPistol),
+								new BehaviorConditional(BT_Conditions::LowPistolAmmo),
+								new BehaviorAction(BT_Actions::GrabClosestPistol)  // GOTO + GRAB IF IN RANGE
+							})
 						}),
-						new BehaviorSequence({
-							new BehaviorConditional(BT_Conditions::HasPistol),
-							new BehaviorConditional(BT_Conditions::LowPistolAmmo),
-							new BehaviorAction(BT_Actions::GrabClosestPistol)  // GOTO + GRAB IF IN RANGE
-						})
 					}),
+
+					// Shotgun
 					new BehaviorSequence({
 						// Check if there is a weapon nearby
 						new BehaviorConditional(BT_Conditions::ShotgunNearby),
 						new BehaviorSelector({
-							// Check if we already have a weapon, or if we are low on ammo
-							new BehaviorConditional(BT_Conditions::HasShotgun),
-							new BehaviorAction(BT_Actions::GrabClosestShotgun)
+							new BehaviorSelector({
+								// Check if we already have a weapon, or if we are low on ammo
+								new BehaviorConditional(BT_Conditions::HasShotgun),
+								new BehaviorAction(BT_Actions::GrabClosestShotgun)
+							}),
+							new BehaviorSequence({
+								new BehaviorConditional(BT_Conditions::HasShotgun),
+								new BehaviorConditional(BT_Conditions::LowShotgunAmmo),
+								new BehaviorAction(BT_Actions::GrabClosestShotgun)  // GOTO + GRAB IF IN RANGE
+							})
 						}),
-						new BehaviorSequence({
-							new BehaviorConditional(BT_Conditions::HasShotgun),
-							new BehaviorConditional(BT_Conditions::LowShotgunAmmo),
-							new BehaviorAction(BT_Actions::GrabClosestShotgun)  // GOTO + GRAB IF IN RANGE
-						})
 					}),
 
 					// Food
@@ -374,10 +407,13 @@ BehaviorTree* Plugin::CreateBehaviortree(Blackboard* pBlackboard) const
 				new BehaviorConditional(BT_Conditions::LootableHouseNearby),
 				new BehaviorAction(BT_Actions::GoToClosestLootableHouse)
 			}),
-
-			//new BehaviorSequence({
-			//	new BehaviorAction(BT_Actions::GoToNextWanderPoint)  // Try to make agent go to places it hasnt gone to yet, could use spatial map
-			//}),
+			new BehaviorSequence({
+				new BehaviorSelector({
+					new BehaviorConditional(BT_Conditions::HasAngularVelocity),  // Only if false, do scan
+					new BehaviorAction(BT_Actions::ScanArea),
+				}),
+				new BehaviorAction(BT_Actions::GoToNextCheckpoint)
+			}),
 
 			// Shouldnt be reaching this if any of previous worked.
 			new BehaviorSequence({
@@ -388,6 +424,55 @@ BehaviorTree* Plugin::CreateBehaviortree(Blackboard* pBlackboard) const
 
 			})
 	);
+}
+
+void Plugin::InitCheckpoints()
+{
+	// Create checkpoints spread over the map
+	// Checkpoints are used to make the agent roam the map and find new stuff
+
+	// Place the checkpoints in a circle around the center of the map (0 0)
+	// Put the checkpoints in a 11/5 hendecagram order (star shaped)
+
+	const float radius{ 300.0f };
+	const int corners{ 11 };
+	const int skips{ 5 };  // See internet for good values (star polygons)	
+
+	const float randomRotationOffset{ Elite::ToRadians(float(rand() % 360)) };  // Random offset up till 360 to vary it from iteration to iteration
+
+	for(size_t i = 0; i < 11; i++)
+	{
+		float angle{ float(i) * 2.0f * float(M_PI) / float(corners) * float(skips) };
+		angle += randomRotationOffset;
+
+		Checkpoint checkpoint{};
+		checkpoint.Location = Elite::Vector2{ radius * cos(angle), radius * sin(angle) };
+		checkpoint.LastVisitTime = -1.0f;
+		checkpoint.IsVisited = false;
+
+		m_Checkpoints.push_back(checkpoint);
+	}
+
+
+	//const float circleRadius{ 200.0f };
+	//const int steps{ 8 };
+	//const float angleStep{ 360.0f / float(steps) };
+	//for(int i = 0; i < steps; i++)
+	//{
+	//	const float angle{ i * angleStep };
+
+	//	Elite::Vector2 checkpointLocation{};
+	//	checkpointLocation.x = circleRadius * cos(angle);
+	//	checkpointLocation.y = circleRadius * sin(angle);
+
+	//	Checkpoint checkpoint{};
+	//	checkpoint.Location = checkpointLocation;
+	//	checkpoint.LastVisitTime = -1.0f;
+	//	checkpoint.IsVisited = false;
+
+	//	m_Checkpoints.push_back(checkpoint);
+	//}
+
 }
 
 void Plugin::CheckForNewHouses()
@@ -543,6 +628,8 @@ void Plugin::UpdateOutputVariables(Blackboard* pBlackboard)
 	bool result{ true };
 	result &= pBlackboard->GetData(BB_STEERING_TARGET, m_SteeringTarget);
 	result &= pBlackboard->GetData(BB_CAN_RUN, m_CanRun);
+	result &= pBlackboard->GetData(BB_ANGULAR_VELOCITY, m_AngularVelocity);
+	result &= pBlackboard->GetData(BB_CURRENT_TIME, m_CurrentTime);
 
 	if(!result)
 	{
@@ -551,8 +638,15 @@ void Plugin::UpdateOutputVariables(Blackboard* pBlackboard)
 
 }
 
-void Plugin::ResetOutputVariables()
+void Plugin::ResetOutputVariables(Blackboard* pBlackboard)
 {
 	m_SteeringTarget = m_pInterface->Agent_GetInfo().Position;  // Reset to current position, not 0
+	m_AngularVelocity = 0;
 	m_CanRun = false;
+
+
+	bool result{ true };
+	result &= pBlackboard->ChangeData(BB_STEERING_TARGET, m_SteeringTarget);
+	result &= pBlackboard->ChangeData(BB_CAN_RUN, m_CanRun);
+	result &= pBlackboard->ChangeData(BB_ANGULAR_VELOCITY, m_AngularVelocity);
 }
