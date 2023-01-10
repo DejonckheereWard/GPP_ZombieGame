@@ -164,18 +164,14 @@ SteeringPlugin_Output Plugin::UpdateSteering(float dt)
 
 	Elite::Vector2 behaviorTarget{};
 	m_pBlackboard->GetData(BB_STEERING_TARGET, behaviorTarget);
+
 	SteeringPlugin_Output steering = SteeringPlugin_Output();
 
 	//Use the Interface (IAssignmentInterface) to 'interface' with the AI_Framework
 	AgentInfo agentInfo = m_pInterface->Agent_GetInfo();
 
-
-
 	//Use the navmesh to calculate the next navmesh point
-	//auto nextTargetPos = m_pInterface->NavMesh_GetClosestPathPoint(checkpointLocation);
-
-	//OR, Use the mouse target
-	Elite::Vector2 nextTargetPos = m_pInterface->NavMesh_GetClosestPathPoint(behaviorTarget); //Uncomment this to use mouse position as guidance
+	Elite::Vector2 nextTargetPos = m_pInterface->NavMesh_GetClosestPathPoint(behaviorTarget);
 	m_NavMeshTarget = nextTargetPos;
 
 	//Simple Seek Behaviour (towards Target)
@@ -186,12 +182,6 @@ SteeringPlugin_Output Plugin::UpdateSteering(float dt)
 	steering.AngularVelocity = m_AngularVelocity;
 	steering.AngularVelocity *= agentInfo.MaxAngularSpeed;
 
-	if(Distance(nextTargetPos, agentInfo.Position) < 2.f)
-	{
-		steering.LinearVelocity = Elite::ZeroVector2;
-	}
-
-	//steering.AngularVelocity = m_AngSpeed; //Rotate your character to inspect the world while walking
 	steering.AutoOrient = false; //Setting AutoOrient to TRue overrides the AngularVelocity
 	steering.RunMode = m_CanRun; //If RunMode is True > MaxLinSpd is increased for a limited time (till your stamina runs out)
 
@@ -212,7 +202,15 @@ void Plugin::Render(float dt) const
 	{
 		const Checkpoint& current = m_Checkpoints[i];
 		const Checkpoint& next = m_Checkpoints[(i + 1) % m_Checkpoints.size()];
-		m_pInterface->Draw_Segment(current.Location, next.Location, {});
+		const Elite::Vector3 lineColor{ 0,0,0 };
+
+		if(i == 0)
+		{
+			// Draw the first checkpoint
+			m_pInterface->Draw_SolidCircle(current.Location, 5.0f, {}, { 0.5f, 0.1f, 0.1f });
+		}
+
+		m_pInterface->Draw_Segment(current.Location, next.Location, lineColor);
 	}
 
 	// Draw line to steering target & circle
@@ -297,24 +295,33 @@ BehaviorTree* Plugin::CreateBehaviortree(Blackboard* pBlackboard) const
 	// Ex. Running away from enemy has a higher priority than going to a house
 	return new BehaviorTree(m_pBlackboard,
 		new BehaviorSelector({
-			// Purge zones
-			new BehaviorSequence({
-				new BehaviorConditional(BT_Conditions::IsInPurgeZone),
-				new BehaviorAction(BT_Actions::FleeFromPurgeZones)
-			}),
-
 			// Healing
 			new BehaviorSequence({
 				new BehaviorConditional(BT_Conditions::LowHealth),
 				new BehaviorConditional(BT_Conditions::HasMedkit),
 				new BehaviorAction(BT_Actions::UseMedkit),
+				new BehaviorConditional(BT_Conditions::Continue)  // Fails the sequence so this doesnt "stop" the tree;
 			}),
 
 			// Eating
 			new BehaviorSequence({
 				new BehaviorConditional(BT_Conditions::LowEnergy),
 				new BehaviorConditional(BT_Conditions::HasFood),
-				new BehaviorAction(BT_Actions::UseFood)
+				new BehaviorAction(BT_Actions::UseFood),
+				new BehaviorConditional(BT_Conditions::Continue)  // Fails the sequence so this doesnt "stop" the tree;
+			}),
+
+			new BehaviorSequence({
+				new BehaviorConditional(BT_Conditions::RecentlyBitten),
+				new BehaviorAction(BT_Actions::BurstSprint),
+				new BehaviorConditional(BT_Conditions::Continue)  // Fails the sequence so this doesnt "stop" the tree;
+			}),
+
+			// Below other important stuff, but they are all set to continue;
+			// Purge zones
+			new BehaviorSequence({
+				new BehaviorConditional(BT_Conditions::IsInPurgeZone),
+				new BehaviorAction(BT_Actions::FleeFromPurgeZones)
 			}),
 
 			// Enemies
@@ -476,15 +483,21 @@ void Plugin::InitCheckpoints()
 	// Place the checkpoints in a circle around the center of the map (0 0)
 	// Put the checkpoints in a 11/5 hendecagram order (star shaped)
 
-	const float radius{ 300.0f };
-	const int corners{ 11 };
-	const int skips{ 5 };  // See internet for good values (star polygons)	
 
-	const float randomRotationOffset{ Elite::ToRadians(float(rand() % 360)) };  // Random offset up till 360 to vary it from iteration to iteration
+	const float radius{ 250.0f };
+	const int corners{ 11 };
+	const int skips{ 4 };  // See internet for good values (star polygons)	
+
+	// Generate random number using default random engine
+	std::random_device rd;
+	std::default_random_engine generator(rd());
+	std::uniform_real_distribution<double> distribution(-M_PI, M_PI);
+
+	float randomRotationOffset{ (float)distribution(generator) };
 
 	for(size_t i = 0; i < 11; i++)
 	{
-		float angle{ float(i) * 2.0f * float(M_PI) / float(corners) * float(skips) };
+		float angle{ float(i) * ((2.0f * float(M_PI)) / float(corners) * float(skips)) };
 		angle += randomRotationOffset;
 
 		Checkpoint checkpoint{};
@@ -658,7 +671,7 @@ void Plugin::UpdateEntities()
 {
 	// Delete purge zones that have expired
 	// Loop in reverse to prevent skipping when a delete happens
-	const float purgeZoneDuration{ 8.0f };  // Time before deleting the purgezone
+	const float purgeZoneDuration{ 8.0f };  // Time before deleting the purgezone 
 	for(int i = m_PurgeZones.size() - 1; i >= 0; --i)
 	{
 		if(m_CurrentTime - m_PurgeZones[i].DetectionTime > purgeZoneDuration)

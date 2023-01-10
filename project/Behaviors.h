@@ -172,6 +172,36 @@ namespace BT_Actions
 		if(!pBlackboard->GetData(BB_CURRENT_TIME, currentTime))
 			return BehaviorState::Failure;
 
+		// Get the steering target
+		Elite::Vector2 steeringTarget;
+		if(!pBlackboard->GetData(BB_STEERING_TARGET, steeringTarget))
+			return BehaviorState::Failure;
+
+		// Get the interface
+		IExamInterface* pInterface;
+		if(!pBlackboard->GetData(BB_EXAM_INTERFACE_PTR, pInterface) || pInterface == nullptr)
+			return BehaviorState::Failure;
+
+
+
+		// Check if we are not already going towards a lootable house (to prevent getting stuck inbetween 2 houses
+		const float threshold{ 5.0f };
+		bool goingToHouse{ false };
+		for(const HouseInfoExtended& house : *pHouseVec)
+		{
+			// Check if target is in house
+			if(house.Looted == false)
+			{
+				const float distanceToHouse{ Distance(steeringTarget, house.Center) };
+				if(distanceToHouse < 1.0f)
+				{
+
+				}
+			}
+
+		}
+
+		// If were not yet going, search for the closest lootable house again, and go towards it.
 		float closestDistance{ FLT_MAX };
 		HouseInfoExtended closestHouse;
 		for(HouseInfoExtended& house : *pHouseVec)
@@ -204,6 +234,9 @@ namespace BT_Actions
 				}
 			}
 		}
+
+		if(goingToHouse)
+			return BehaviorState::Success;
 
 		if(closestDistance == FLT_MAX)
 		{
@@ -254,6 +287,14 @@ namespace BT_Actions
 				}
 			}
 		}
+
+		// None of the checkpoints worked (All have been visited), reset every checkpoint
+		for(Checkpoint& checkpoint : *pCheckpointVec)
+		{
+			checkpoint.IsVisited = false;
+		}
+
+
 		return BehaviorState::Failure;
 	}
 
@@ -302,6 +343,8 @@ namespace BT_Actions
 			ItemInfo grabbedItem{};
 			if(pInterface->Item_Grab(itemToGrab, grabbedItem))
 			{
+				pInterface->Inventory_RemoveItem(BB_PISTOL_INV_SLOT);  // Remove existing item
+
 				if(pInterface->Inventory_AddItem(BB_PISTOL_INV_SLOT, grabbedItem))
 				{
 					pItemVec->erase(std::remove_if(pItemVec->begin(), pItemVec->end(), [closestItem](const ItemInfo& item) { return item.ItemHash == closestItem.ItemHash; }), pItemVec->end());
@@ -365,6 +408,8 @@ namespace BT_Actions
 			ItemInfo grabbedItem{};
 			if(pInterface->Item_Grab(itemToGrab, grabbedItem))
 			{
+				pInterface->Inventory_RemoveItem(BB_SHOTGUN_INV_SLOT);  // Remove existing item
+
 				if(pInterface->Inventory_AddItem(BB_SHOTGUN_INV_SLOT, grabbedItem))
 				{
 					// Remove item from the list
@@ -429,6 +474,8 @@ namespace BT_Actions
 			ItemInfo grabbedItem{};
 			if(pInterface->Item_Grab(itemToGrab, grabbedItem))
 			{
+				pInterface->Inventory_RemoveItem(BB_FOOD_INV_SLOT);  // Remove existing item
+
 				if(pInterface->Inventory_AddItem(BB_FOOD_INV_SLOT, grabbedItem))
 				{
 					// Remove item from the list
@@ -493,6 +540,8 @@ namespace BT_Actions
 			ItemInfo grabbedItem{};
 			if(pInterface->Item_Grab(itemToGrab, grabbedItem))
 			{
+				pInterface->Inventory_RemoveItem(BB_MEDKIT_INV_SLOT);  // Remove existing item
+
 				if(pInterface->Inventory_AddItem(BB_MEDKIT_INV_SLOT, grabbedItem))
 				{
 					// Remove item from the list
@@ -555,15 +604,11 @@ namespace BT_Actions
 
 			EntityInfo itemToDestroy{};
 			itemToDestroy.EntityHash = closestItem.ItemHash;
-			ItemInfo grabbedItem{};
-			if(!pInterface->Item_Destroy(itemToDestroy))
-				return BehaviorState::Failure;
-
-			// Remove item from the list
-			pItemVec->erase(std::remove_if(pItemVec->begin(), pItemVec->end(), [closestItem](const ItemInfo& item) { return item.ItemHash == closestItem.ItemHash; }), pItemVec->end());
-
-
-			return BehaviorState::Success;
+			if(pInterface->Item_Destroy(itemToDestroy))
+			{
+				// Remove item from the list if succesfully destroyed
+				pItemVec->erase(std::remove_if(pItemVec->begin(), pItemVec->end(), [closestItem](const ItemInfo& item) { return item.ItemHash == closestItem.ItemHash; }), pItemVec->end());
+			}
 		}
 
 		// Set target in the blackboard
@@ -755,7 +800,7 @@ namespace BT_Actions
 		if(!pBlackboard->GetData(BB_AGENT_INFO_PTR, pAgentInfo) || pAgentInfo == nullptr)
 			return BehaviorState::Failure;
 
-		const float staminaThreshold{ 7.0f };
+		const float staminaThreshold{ 5.0f };
 		if(pAgentInfo->Stamina > staminaThreshold)
 		{
 			if(!pBlackboard->ChangeData(BB_CAN_RUN, true))
@@ -1187,7 +1232,7 @@ namespace BT_Conditions
 	bool LootableHouseNearby(Blackboard* pBlackboard)
 	{
 		PrintColorCondition("CHECKING IF LOOTABLE HOUSE NEARBY");
-		const float nearbyRadius{ 50.0f };
+		const float nearbyRadius{ 100.0f };
 
 		// Get the agent
 		AgentInfo* pAgentInfo;
@@ -1259,13 +1304,12 @@ namespace BT_Conditions
 		if(closestDistance == FLT_MAX)
 			return false;
 
-		// Change the angular rotation based on where the enemy is
-		const Elite::Vector2 vectorToTarget{ closestEnemy.Location - pAgentInfo->Position };
-		const float vectorToAngle{ atan2f(vectorToTarget.y, vectorToTarget.x) };
 
-		// Check if the agent is looking at the enemy
-		const float angleDiff{ abs(vectorToAngle - pAgentInfo->Orientation) };
-		if(angleDiff < 0.1f)
+		const Elite::Vector2 vectorToTarget{ closestEnemy.Location - pAgentInfo->Position };
+		const Elite::Vector2 orientationVector{ cosf(pAgentInfo->Orientation), sinf(pAgentInfo->Orientation) };
+		const float angleBetween{ AngleBetween(vectorToTarget, orientationVector) };
+
+		if(abs(angleBetween) < 0.02f)
 			return true;
 		return false;
 	}
@@ -1293,4 +1337,22 @@ namespace BT_Conditions
 		PrintColorCondition("CONTINUEING BEHAVIOR TREE");
 		return false;
 	}
+
+	bool RecentlyBitten(Blackboard* pBlackboard)
+	{
+		PrintColorCondition("CHECKING IF PLAYER HAS BEEN BITTEN RECENTLY");
+		const float threshold{ 0.1f };
+
+		// Get the agent
+		AgentInfo* pAgentInfo;
+		if(!pBlackboard->GetData(BB_AGENT_INFO_PTR, pAgentInfo) || pAgentInfo == nullptr)
+			return false;
+
+		if(pAgentInfo->WasBitten)
+		{
+			return true;
+		}
+		return false;
+	}
+
 }
