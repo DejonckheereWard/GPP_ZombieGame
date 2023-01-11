@@ -470,8 +470,7 @@ BehaviorTree* Plugin::CreateBehaviortree(Blackboard* pBlackboard) const
 				new BehaviorConditional(BT_Conditions::Test),
 				new BehaviorAction(BT_Actions::Test)
 			}),
-
-			})
+		})
 	);
 }
 
